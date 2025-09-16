@@ -102,6 +102,38 @@ show_all_vms() {
     read -p "Press Enter to continue..."
 }
 
+# ---------- Delete One VM ----------
+delete_one_vm() {
+    echo -e "${YELLOW}${BOLD}Deleting a Single VM...${RESET}"
+    gcloud projects list --format="table(projectId,name)"
+    read -p "Enter Project ID: " projid
+    gcloud compute instances list --project=$projid --format="table(name,zone,status)"
+    read -p "Enter VM Name to delete: " vmname
+    zone=$(gcloud compute instances list --project=$projid --filter="name=$vmname" --format="value(zone)")
+    if [ -z "$zone" ]; then
+        echo -e "${RED}VM not found!${RESET}"
+    else
+        gcloud compute instances delete $vmname --project=$projid --zone=$zone --quiet
+        echo -e "${GREEN}VM $vmname deleted successfully from project $projid.${RESET}"
+    fi
+    read -p "Press Enter to continue..."
+}
+
+# ---------- Auto Delete All VMs ----------
+delete_all_vms() {
+    echo -e "${RED}${BOLD}Deleting ALL VMs across projects (prodip20–22)...${RESET}"
+    for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
+        gcloud config set project $proj > /dev/null 2>&1
+        mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)")
+        for vm in "${vms[@]}"; do
+            zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)")
+            gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet
+            echo -e "${GREEN}Deleted $vm from $proj${RESET}"
+        done
+    done
+    read -p "Press Enter to continue..."
+}
+
 # ---------- Connect VM using Termius Key (UNCHANGED) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
@@ -168,10 +200,12 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 🔗 Connect VM (Termius Key)                    |"
     echo -e "${YELLOW}${BOLD}| [7] ❌ Disconnect VM                               |"
-    echo -e "${YELLOW}${BOLD}| [8] 🚪 Exit                                        |"
+    echo -e "${YELLOW}${BOLD}| [8] 🗑️ Delete ONE VM                               |"
+    echo -e "${YELLOW}${BOLD}| [9] 💣 Auto Delete ALL VMs                         |"
+    echo -e "${YELLOW}${BOLD}| [10] 🚪 Exit                                       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose an option [1-8]: " choice
+    read -p "Choose an option [1-10]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -181,7 +215,9 @@ while true; do
         5) show_all_vms ;;
         6) connect_vm ;;   # unchanged
         7) disconnect_vm ;;
-        8) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
+        8) delete_one_vm ;;
+        9) delete_all_vms ;;
+        10) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter to continue..." ;;
     esac
 done
