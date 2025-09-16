@@ -43,41 +43,36 @@ change_google_account() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Project + Billing (Manual Name) ----------
-auto_create_projects() {
-    echo -e "${YELLOW}${BOLD}Creating Projects with Manual Names + Auto Billing Link...${RESET}"
-    billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
+# ---------- Create Project (Manual, Auto Enable API + Billing) ----------
+create_project_manual() {
+    echo -e "${YELLOW}${BOLD}Creating a New Project...${RESET}"
+    read -p "Enter Project ID (unique, lowercase, no spaces): " projid
+    read -p "Enter Project Name: " projname
 
-    if [ -z "$billing_id" ]; then
-        echo -e "${RED}${BOLD}No Billing Account Found!${RESET}"
+    echo -e "${CYAN}${BOLD}Creating Project: $projid (${projname})${RESET}"
+    gcloud projects create "$projid" --name="$projname" --set-as-default --quiet
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to create project!${RESET}"
+        read -p "Press Enter to continue..."
         return
     fi
 
-    read -p "How many projects do you want to create? " num
-    created_projects=()
+    # ✅ Auto enable Compute Engine API
+    echo -e "${YELLOW}Enabling Compute Engine API for $projid...${RESET}"
+    gcloud services enable compute.googleapis.com --project=$projid --quiet
 
-    for ((i=1; i<=num; i++)); do
-        read -p "Enter Project ID (must be unique, lowercase, no spaces): " projid
-        read -p "Enter Project Name (can have spaces): " projname
+    # ✅ Auto link Billing
+    billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
+    if [ -n "$billing_id" ]; then
+        echo -e "${GREEN}Linking Billing Account $billing_id to $projid...${RESET}"
+        gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
+        echo -e "${GREEN}${BOLD}Billing linked successfully!${RESET}"
+    else
+        echo -e "${RED}No Billing Account Found!${RESET}"
+    fi
 
-        echo -e "${CYAN}${BOLD}Creating Project: $projid (${projname})${RESET}"
-        gcloud projects create "$projid" --name="$projname" --set-as-default --quiet
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Project $projid created.${RESET}"
-            echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id...${RESET}"
-            gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
-            created_projects+=("$projid ($projname)")
-        else
-            echo -e "${RED}Failed to create project $projid${RESET}"
-        fi
-    done
-
-    echo -e "${GREEN}${BOLD}Projects Created & Linked with Billing:${RESET}"
-    for proj in "${created_projects[@]}"; do
-        echo "- $proj"
-    done
-
+    echo -e "${GREEN}${BOLD}Project $projid created and ready.${RESET}"
     read -p "Press Enter to continue..."
 }
 
@@ -88,7 +83,7 @@ show_billing_accounts() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create ----------
+# ---------- Auto VM Create (API Auto Enable) ----------
 auto_create_vms() {
     echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
     read pubkey
@@ -118,6 +113,11 @@ auto_create_vms() {
     for proj in $projects; do
         gcloud config set project $proj > /dev/null 2>&1
         echo -e "${CYAN}${BOLD}Switched to Project: $proj${RESET}"
+
+        # ✅ Auto enable Compute Engine API
+        echo -e "${YELLOW}Enabling Compute Engine API for $proj...${RESET}"
+        gcloud services enable compute.googleapis.com --quiet
+
         for j in {1..2}; do
             vmname="${vmnames[$count]}"
             echo -e "${GREEN}${BOLD}Creating VM $vmname in $proj...${RESET}"
@@ -278,7 +278,7 @@ while true; do
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Change / Login Google Account               |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects (Manual) + Auto Billing     |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Project (Manual) + Auto Billing      |"
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
@@ -295,7 +295,7 @@ while true; do
     case $choice in
         1) fresh_install ;;
         2) change_google_account ;;
-        3) auto_create_projects ;;
+        3) create_project_manual ;;
         4) auto_create_vms ;;
         5) show_all_vms ;;
         6) show_all_projects ;;
