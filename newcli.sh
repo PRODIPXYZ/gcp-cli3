@@ -43,9 +43,9 @@ change_google_account() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Project + Billing (Fixed) ----------
+# ---------- Auto Project + Billing (Manual Name) ----------
 auto_create_projects() {
-    echo -e "${YELLOW}${BOLD}Creating 2 Random Projects + Auto Billing Link...${RESET}"
+    echo -e "${YELLOW}${BOLD}Creating Projects with Manual Names + Auto Billing Link...${RESET}"
     billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
 
     if [ -z "$billing_id" ]; then
@@ -53,19 +53,21 @@ auto_create_projects() {
         return
     fi
 
+    read -p "How many projects do you want to create? " num
     created_projects=()
 
-    for i in {1..2}; do
-        projid="auto-proj-$RANDOM-$RANDOM"
-        projid=$(echo "$projid" | tr '[:upper:]' '[:lower:]')   # enforce lowercase
-        echo -e "${CYAN}${BOLD}Creating Project: $projid${RESET}"
-        
-        gcloud projects create "$projid" --name="auto-proj-$i" --set-as-default --quiet
+    for ((i=1; i<=num; i++)); do
+        read -p "Enter Project ID (must be unique, lowercase, no spaces): " projid
+        read -p "Enter Project Name (can have spaces): " projname
+
+        echo -e "${CYAN}${BOLD}Creating Project: $projid (${projname})${RESET}"
+        gcloud projects create "$projid" --name="$projname" --set-as-default --quiet
+
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}Project $projid created.${RESET}"
             echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id...${RESET}"
             gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
-            created_projects+=("$projid")
+            created_projects+=("$projid ($projname)")
         else
             echo -e "${RED}Failed to create project $projid${RESET}"
         fi
@@ -76,6 +78,13 @@ auto_create_projects() {
         echo "- $proj"
     done
 
+    read -p "Press Enter to continue..."
+}
+
+# ---------- Show Billing Accounts ----------
+show_billing_accounts() {
+    echo -e "${YELLOW}${BOLD}Available Billing Accounts:${RESET}"
+    gcloud beta billing accounts list --format="table(displayName,accountId,open,masterAccountId)"
     read -p "Press Enter to continue..."
 }
 
@@ -269,7 +278,7 @@ while true; do
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Change / Login Google Account               |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (2) + Billing Link     |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects (Manual) + Auto Billing     |"
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
@@ -278,9 +287,10 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
     echo -e "${YELLOW}${BOLD}| [11] 🚪 Exit                                       |"
+    echo -e "${YELLOW}${BOLD}| [12] 💳 Show Billing Accounts                      |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose an option [1-11]: " choice
+    read -p "Choose an option [1-12]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -294,6 +304,7 @@ while true; do
         9) delete_one_vm ;;
         10) delete_all_vms ;;
         11) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
+        12) show_billing_accounts ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter to continue..." ;;
     esac
 done
