@@ -43,21 +43,28 @@ change_google_account() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Project + Billing ----------
+# ---------- Auto Project + Billing (Fixed) ----------
 auto_create_projects() {
-    echo -e "${YELLOW}${BOLD}Creating 3 Projects + Linking Billing...${RESET}"
+    echo -e "${YELLOW}${BOLD}Creating 2 Random Projects + Auto Billing Link...${RESET}"
     billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
+
     if [ -z "$billing_id" ]; then
         echo -e "${RED}${BOLD}No Billing Account Found!${RESET}"
         return
     fi
 
-    for i in {1..3}; do
+    for i in {1..2}; do
         projid="auto-proj-$RANDOM"
+        echo -e "${CYAN}${BOLD}Creating Project: $projid${RESET}"
         gcloud projects create "$projid" --name="auto-proj-$i" --quiet
+
+        echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id to $projid...${RESET}"
         gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
-        echo -e "${GREEN}Project $projid created & billing linked.${RESET}"
+
+        echo -e "${GREEN}Project $projid created & billing linked successfully.${RESET}"
     done
+
+    echo -e "${GREEN}${BOLD}All Projects Created & Linked with Billing!${RESET}"
     read -p "Press Enter to continue..."
 }
 
@@ -251,7 +258,7 @@ while true; do
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Change / Login Google Account               |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (3) + Billing Link     |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (2) + Billing Link     |"
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
