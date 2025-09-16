@@ -53,18 +53,29 @@ auto_create_projects() {
         return
     fi
 
+    created_projects=()
+
     for i in {1..2}; do
-        projid="auto-proj-$RANDOM"
+        projid="auto-proj-$RANDOM-$RANDOM"
+        projid=$(echo "$projid" | tr '[:upper:]' '[:lower:]')   # enforce lowercase
         echo -e "${CYAN}${BOLD}Creating Project: $projid${RESET}"
-        gcloud projects create "$projid" --name="auto-proj-$i" --quiet
-
-        echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id to $projid...${RESET}"
-        gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
-
-        echo -e "${GREEN}Project $projid created & billing linked successfully.${RESET}"
+        
+        gcloud projects create "$projid" --name="auto-proj-$i" --set-as-default --quiet
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Project $projid created.${RESET}"
+            echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id...${RESET}"
+            gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
+            created_projects+=("$projid")
+        else
+            echo -e "${RED}Failed to create project $projid${RESET}"
+        fi
     done
 
-    echo -e "${GREEN}${BOLD}All Projects Created & Linked with Billing!${RESET}"
+    echo -e "${GREEN}${BOLD}Projects Created & Linked with Billing:${RESET}"
+    for proj in "${created_projects[@]}"; do
+        echo "- $proj"
+    done
+
     read -p "Press Enter to continue..."
 }
 
