@@ -113,7 +113,7 @@ auto_create_vms() {
     show_all_vms
 }
 
-# ---------- Show All VMs (Clean Output with Username) ----------
+# ---------- Show All VMs ----------
 show_all_vms() {
     echo -e "${YELLOW}${BOLD}Showing All VMs Across All Projects:${RESET}"
     echo "------------------------------------------------------"
@@ -172,7 +172,7 @@ delete_all_vms() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Connect VM using Termius Key (unchanged) ----------
+# ---------- Connect VM (All Projects, Styled) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key to use for VM connections:${RESET}"
@@ -182,35 +182,49 @@ connect_vm() {
         echo -e "${GREEN}Termius key saved at $TERM_KEY_PATH${RESET}"
     fi
 
-    echo -e "${YELLOW}${BOLD}Available VMs in current project:${RESET}"
-    mapfile -t vms < <(gcloud compute instances list --format="value(name)")
-    if [ ${#vms[@]} -eq 0 ]; then
-        echo -e "${RED}No VMs found!${RESET}"
-        read -p "Press Enter to continue..."
-        return
-    fi
+    echo -e "${YELLOW}${BOLD}Fetching all VMs across all projects...${RESET}"
+    echo "------------------------------------------------------"
 
-    for i in "${!vms[@]}"; do
-        echo "$((i+1))) ${vms[$i]}"
+    vm_list=()
+    index=1
+
+    for proj in $(gcloud projects list --format="value(projectId)"); do
+        mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,zone,EXTERNAL_IP)")
+        for vm in "${vms[@]}"; do
+            name=$(echo $vm | awk '{print $1}')
+            zone=$(echo $vm | awk '{print $2}')
+            ip=$(echo $vm | awk '{print $3}')
+            if [ -n "$name" ] && [ -n "$ip" ]; then
+                echo -e "${CYAN}${BOLD}[$index]${RESET} Project: ${GREEN}$proj${RESET} | VM: ${YELLOW}$name${RESET} | IP: ${GREEN}$ip${RESET} | User: ${YELLOW}$name${RESET}"
+                vm_list+=("$proj|$name|$zone|$ip")
+                ((index++))
+            fi
+        done
     done
 
-    read -p "Select VM to connect [number]: " vmnum
-    vmindex=$((vmnum-1))
-    if [[ -z "${vms[$vmindex]}" ]]; then
-        echo -e "${RED}Invalid selection!${RESET}"
+    if [ ${#vm_list[@]} -eq 0 ]; then
+        echo -e "${RED}No VMs found across projects!${RESET}"
         read -p "Press Enter to continue..."
         return
     fi
 
-    vmname="${vms[$vmindex]}"
-    zone=$(gcloud compute instances list --filter="name=$vmname" --format="value(zone)")
-    ext_ip=$(gcloud compute instances describe $vmname --zone $zone --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
-    ssh_user=$(gcloud compute instances describe $vmname --zone $zone --format="get(metadata.ssh-keys)" | awk -F':' '{print $1}')
+    echo "------------------------------------------------------"
+    read -p "Enter VM number to connect: " choice
 
-    echo "$vmname|$ssh_user|$ext_ip|$TERM_KEY_PATH" > "$SSH_INFO_FILE"
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#vm_list[@]} ]; then
+        echo -e "${RED}Invalid choice!${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
 
-    echo -e "${GREEN}Connecting to $vmname using Termius private key...${RESET}"
-    ssh -i "$TERM_KEY_PATH" "$ssh_user@$ext_ip"
+    selected="${vm_list[$((choice-1))]}"
+    proj=$(echo "$selected" | cut -d'|' -f1)
+    vmname=$(echo "$selected" | cut -d'|' -f2)
+    zone=$(echo "$selected" | cut -d'|' -f3)
+    ip=$(echo "$selected" | cut -d'|' -f4)
+
+    echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj...${RESET}"
+    ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
     read -p "Press Enter to continue..."
 }
 
@@ -237,7 +251,7 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Termius Key)                    |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (All Projects)                   |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
