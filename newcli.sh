@@ -60,7 +60,7 @@ auto_create_projects() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create (Generic Project Detection) ----------
+# ---------- Auto VM Create ----------
 auto_create_vms() {
     echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
     read pubkey
@@ -113,15 +113,23 @@ auto_create_vms() {
     show_all_vms
 }
 
-# ---------- Show All VMs ----------
+# ---------- Show All VMs (Clean Output with Username) ----------
 show_all_vms() {
     echo -e "${YELLOW}${BOLD}Showing All VMs Across All Projects:${RESET}"
+    echo "------------------------------------------------------"
     gcloud projects list --format="value(projectId)" | while read proj; do
-        echo -e "${CYAN}${BOLD}Project: $proj${RESET}"
-        gcloud compute instances list \
-            --project=$proj \
-            --format="table(name,zone,status,EXTERNAL_IP,metadata.ssh-keys)"
+        vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)")
+        if [ -n "$vms" ]; then
+            echo -e "${CYAN}${BOLD}Project: $proj${RESET}"
+            echo "VM Name        External IP        SSH Username"
+            echo "-----------------------------------------------"
+            echo "$vms" | while read name ip; do
+                printf "%-15s %-18s %-15s\n" "$name" "$ip" "$name"
+            done
+            echo
+        fi
     done
+    echo "------------------------------------------------------"
     read -p "Press Enter to continue..."
 }
 
