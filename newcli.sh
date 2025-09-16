@@ -95,10 +95,17 @@ auto_create_vms() {
 # ---------- Show All VMs ----------
 show_all_vms() {
     echo -e "${YELLOW}${BOLD}Showing All VMs Across Projects:${RESET}"
-    for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
+    for proj in $(gcloud projects list --format="value(projectId)"); do
         echo -e "${CYAN}${BOLD}Project: $proj${RESET}"
         gcloud compute instances list --project=$proj --format="table(name,zone,status,INTERNAL_IP,EXTERNAL_IP)"
     done
+    read -p "Press Enter to continue..."
+}
+
+# ---------- Show All Projects ----------
+show_all_projects() {
+    echo -e "${YELLOW}${BOLD}Listing All Projects:${RESET}"
+    gcloud projects list --format="table(projectId,name,createTime)"
     read -p "Press Enter to continue..."
 }
 
@@ -119,11 +126,11 @@ delete_one_vm() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Delete All VMs ----------
+# ---------- Auto Delete All VMs (ALL PROJECTS) ----------
 delete_all_vms() {
-    echo -e "${RED}${BOLD}Deleting ALL VMs across projects (prodip20–22)...${RESET}"
-    for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
-        gcloud config set project $proj > /dev/null 2>&1
+    echo -e "${RED}${BOLD}Deleting ALL VMs across ALL projects...${RESET}"
+    for proj in $(gcloud projects list --format="value(projectId)"); do
+        echo -e "${CYAN}${BOLD}Checking Project: $proj${RESET}"
         mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)")
         for vm in "${vms[@]}"; do
             zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)")
@@ -198,14 +205,15 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (3) + Billing Link     |"
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs                           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
-    echo -e "${YELLOW}${BOLD}| [6] 🔗 Connect VM (Termius Key)                    |"
-    echo -e "${YELLOW}${BOLD}| [7] ❌ Disconnect VM                               |"
-    echo -e "${YELLOW}${BOLD}| [8] 🗑️ Delete ONE VM                               |"
-    echo -e "${YELLOW}${BOLD}| [9] 💣 Auto Delete ALL VMs                         |"
-    echo -e "${YELLOW}${BOLD}| [10] 🚪 Exit                                       |"
+    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Termius Key)                    |"
+    echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
+    echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
+    echo -e "${YELLOW}${BOLD}| [10] 💣 Auto Delete ALL VMs (ALL Projects)         |"
+    echo -e "${YELLOW}${BOLD}| [11] 🚪 Exit                                       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose an option [1-10]: " choice
+    read -p "Choose an option [1-11]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -213,11 +221,12 @@ while true; do
         3) auto_create_projects ;;
         4) auto_create_vms ;;
         5) show_all_vms ;;
-        6) connect_vm ;;   # unchanged
-        7) disconnect_vm ;;
-        8) delete_one_vm ;;
-        9) delete_all_vms ;;
-        10) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
+        6) show_all_projects ;;
+        7) connect_vm ;;
+        8) disconnect_vm ;;
+        9) delete_one_vm ;;
+        10) delete_all_vms ;;
+        11) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter to continue..." ;;
     esac
 done
