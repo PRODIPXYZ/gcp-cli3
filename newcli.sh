@@ -60,21 +60,29 @@ auto_create_projects() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create ----------
+# ---------- Auto VM Create (6 Names → 2 VM per project) ----------
 auto_create_vms() {
-    echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (username:ssh-rsa ...):${RESET}"
-    read sshkey
+    echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
+    read pubkey
 
     zone="asia-southeast1-b"
     mtype="n2d-custom-4-25600"
     disksize="60"
 
-    vm_count=1
+    echo -e "${CYAN}${BOLD}Enter 6 VM Names (each will also be SSH username)...${RESET}"
+    vmnames=()
+    for i in {1..6}; do
+        read -p "Enter VM Name #$i: " name
+        vmnames+=("$name")
+    done
+
+    count=0
     for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
         gcloud config set project $proj > /dev/null 2>&1
+        echo -e "${CYAN}${BOLD}Switched to Project: $proj${RESET}"
         for j in {1..2}; do
-            vmname="vm${vm_count}"
-            echo -e "${GREEN}${BOLD}Creating $vmname in $proj...${RESET}"
+            vmname="${vmnames[$count]}"
+            echo -e "${GREEN}${BOLD}Creating VM $vmname in $proj...${RESET}"
             gcloud compute instances create $vmname \
                 --zone=$zone \
                 --machine-type=$mtype \
@@ -82,22 +90,25 @@ auto_create_vms() {
                 --image-project=ubuntu-os-cloud \
                 --boot-disk-size=${disksize}GB \
                 --boot-disk-type=pd-balanced \
-                --metadata ssh-keys="$sshkey" \
+                --metadata ssh-keys="${vmname}:${pubkey}" \
                 --tags=http-server,https-server \
                 --quiet
-            ((vm_count++))
+            ((count++))
         done
     done
-    echo -e "${GREEN}${BOLD}All 6 VMs Created Successfully!${RESET}"
-    read -p "Press Enter to continue..."
+    echo -e "${GREEN}${BOLD}All 6 VMs Created Successfully Across Projects!${RESET}"
+    echo
+    show_all_vms
 }
 
 # ---------- Show All VMs ----------
 show_all_vms() {
     echo -e "${YELLOW}${BOLD}Showing All VMs Across Projects:${RESET}"
-    for proj in $(gcloud projects list --format="value(projectId)"); do
+    for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
         echo -e "${CYAN}${BOLD}Project: $proj${RESET}"
-        gcloud compute instances list --project=$proj --format="table(name,zone,status,INTERNAL_IP,EXTERNAL_IP)"
+        gcloud compute instances list \
+            --project=$proj \
+            --format="table(name,zone,status,EXTERNAL_IP,metadata.ssh-keys)"
     done
     read -p "Press Enter to continue..."
 }
@@ -203,13 +214,13 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Change / Login Google Account               |"
     echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (3) + Billing Link     |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs                           |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
     echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Termius Key)                    |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
-    echo -e "${YELLOW}${BOLD}| [10] 💣 Auto Delete ALL VMs (ALL Projects)         |"
+    echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
     echo -e "${YELLOW}${BOLD}| [11] 🚪 Exit                                       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
