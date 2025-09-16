@@ -51,16 +51,16 @@ auto_create_projects() {
         return
     fi
 
-    for i in {20..22}; do
-        projid="prodip${i}-$(shuf -i 100-999 -n 1)"
-        gcloud projects create "$projid" --name="prodip${i}" --quiet
+    for i in {1..3}; do
+        projid="auto-proj-$RANDOM"
+        gcloud projects create "$projid" --name="auto-proj-$i" --quiet
         gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
         echo -e "${GREEN}Project $projid created & billing linked.${RESET}"
     done
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create (6 Names → 2 VM per project) ----------
+# ---------- Auto VM Create (Generic Project Detection) ----------
 auto_create_vms() {
     echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
     read pubkey
@@ -69,7 +69,18 @@ auto_create_vms() {
     mtype="n2d-custom-4-25600"
     disksize="60"
 
-    echo -e "${CYAN}${BOLD}Enter 6 VM Names (each will also be SSH username)...${RESET}"
+    # Detect first 3 available projects
+    projects=$(gcloud projects list --format="value(projectId)" | head -n 3)
+
+    if [ -z "$projects" ]; then
+        echo -e "${RED}${BOLD}No projects found in your account! Please create projects first.${RESET}"
+        return
+    fi
+
+    echo -e "${CYAN}${BOLD}Auto-Detected Projects:${RESET}"
+    echo "$projects"
+
+    echo -e "${CYAN}${BOLD}Enter 6 VM Names (these will also be SSH usernames)...${RESET}"
     vmnames=()
     for i in {1..6}; do
         read -p "Enter VM Name #$i: " name
@@ -77,7 +88,7 @@ auto_create_vms() {
     done
 
     count=0
-    for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
+    for proj in $projects; do
         gcloud config set project $proj > /dev/null 2>&1
         echo -e "${CYAN}${BOLD}Switched to Project: $proj${RESET}"
         for j in {1..2}; do
@@ -96,6 +107,7 @@ auto_create_vms() {
             ((count++))
         done
     done
+
     echo -e "${GREEN}${BOLD}All 6 VMs Created Successfully Across Projects!${RESET}"
     echo
     show_all_vms
@@ -103,8 +115,8 @@ auto_create_vms() {
 
 # ---------- Show All VMs ----------
 show_all_vms() {
-    echo -e "${YELLOW}${BOLD}Showing All VMs Across Projects:${RESET}"
-    for proj in $(gcloud projects list --format="value(projectId)" | grep "prodip2"); do
+    echo -e "${YELLOW}${BOLD}Showing All VMs Across All Projects:${RESET}"
+    gcloud projects list --format="value(projectId)" | while read proj; do
         echo -e "${CYAN}${BOLD}Project: $proj${RESET}"
         gcloud compute instances list \
             --project=$proj \
@@ -137,7 +149,7 @@ delete_one_vm() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Delete All VMs (ALL PROJECTS) ----------
+# ---------- Auto Delete All VMs ----------
 delete_all_vms() {
     echo -e "${RED}${BOLD}Deleting ALL VMs across ALL projects...${RESET}"
     for proj in $(gcloud projects list --format="value(projectId)"); do
@@ -152,7 +164,7 @@ delete_all_vms() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Connect VM using Termius Key (UNCHANGED) ----------
+# ---------- Connect VM using Termius Key (unchanged) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key to use for VM connections:${RESET}"
