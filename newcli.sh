@@ -5,6 +5,7 @@ RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
 CYAN="\e[36m"
+MAGENTA="\e[35m"
 BOLD='\033[1m'
 RESET="\e[0m"
 
@@ -69,7 +70,6 @@ auto_create_vms() {
     mtype="n2d-custom-4-25600"
     disksize="60"
 
-    # Detect first 3 available projects
     projects=$(gcloud projects list --format="value(projectId)" | head -n 3)
 
     if [ -z "$projects" ]; then
@@ -172,7 +172,7 @@ delete_all_vms() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Connect VM (All Projects, Styled) ----------
+# ---------- Connect VM (Box Style, Yellow Borders) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key to use for VM connections:${RESET}"
@@ -183,7 +183,6 @@ connect_vm() {
     fi
 
     echo -e "${YELLOW}${BOLD}Fetching all VMs across all projects...${RESET}"
-    echo "------------------------------------------------------"
 
     vm_list=()
     index=1
@@ -195,7 +194,11 @@ connect_vm() {
             zone=$(echo $vm | awk '{print $2}')
             ip=$(echo $vm | awk '{print $3}')
             if [ -n "$name" ] && [ -n "$ip" ]; then
-                echo -e "${CYAN}${BOLD}[$index]${RESET} Project: ${GREEN}$proj${RESET} | VM: ${YELLOW}$name${RESET} | IP: ${GREEN}$ip${RESET} | User: ${YELLOW}$name${RESET}"
+                echo -e "${YELLOW}${BOLD}+----------------------------------------------------+${RESET}"
+                echo -e "${YELLOW}${BOLD}|${RESET} [${index}] VM: ${CYAN}${BOLD}$name${RESET}"
+                echo -e "${YELLOW}${BOLD}|${RESET} IP: ${GREEN}$ip${RESET}"
+                echo -e "${YELLOW}${BOLD}|${RESET} Project: ${MAGENTA}$proj${RESET}"
+                echo -e "${YELLOW}${BOLD}+----------------------------------------------------+${RESET}"
                 vm_list+=("$proj|$name|$zone|$ip")
                 ((index++))
             fi
@@ -208,6 +211,7 @@ connect_vm() {
         return
     fi
 
+    echo -e "${GREEN}${BOLD}Total VMs Found: ${#vm_list[@]}${RESET}"
     echo "------------------------------------------------------"
     read -p "Enter VM number to connect: " choice
 
@@ -251,7 +255,7 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (All Projects)                   |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                     |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
