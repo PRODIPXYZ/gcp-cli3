@@ -160,23 +160,52 @@ auto_create_vms() {
     show_all_vms
 }
 
-# ---------- Show All VMs ----------
+# ---------- Show All VMs (Pro Table + Blink Project ID) ----------
 show_all_vms() {
-    echo -e "${YELLOW}${BOLD}Showing All VMs Across All Projects:${RESET}"
-    echo "------------------------------------------------------"
-    gcloud projects list --format="value(projectId)" | while read proj; do
-        vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)")
-        if [ -n "$vms" ]; then
-            echo -e "${CYAN}${BOLD}Project: $proj${RESET}"
-            echo "VM Name        External IP        SSH Username"
-            echo "-----------------------------------------------"
-            echo "$vms" | while read name ip; do
-                printf "%-15s %-18s %-15s\n" "$name" "$ip" "$name"
-            done
-            echo
-        fi
+    echo -e "\n${YELLOW}${BOLD}================================================="
+    echo -e "         🌍 Listing All VMs Across Projects"
+    echo -e "=================================================${RESET}\n"
+
+    rows=()
+
+    for proj in $(gcloud projects list --format="value(projectId)"); do
+        vms=$(gcloud compute instances list \
+            --project="$proj" \
+            --format="csv(name,EXTERNAL_IP)" 2>/dev/null | tail -n +2)
+
+        while IFS=',' read -r name ip; do
+            [ -z "$name" ] && continue
+            rows+=("$proj,$name,${ip:-—}")
+        done <<< "$vms"
     done
-    echo "------------------------------------------------------"
+
+    if [ ${#rows[@]} -eq 0 ]; then
+        echo -e "${RED}${BOLD}❌ No VMs found across any projects.${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    # Table Header
+    printf "┌──────┬────────────────────────────┬──────────────────────┬─────────────────────┐\n"
+    printf "│ %-4s │ %-26s │ %-20s │ %-19s │\n" "S.No" "PROJECT" "USERNAME" "IP"
+    printf "├──────┼────────────────────────────┼──────────────────────┼─────────────────────┤\n"
+
+    i=1
+    for row in "${rows[@]}"; do
+        proj=$(echo "$row" | cut -d',' -f1)
+        name=$(echo "$row" | cut -d',' -f2)
+        ip=$(echo "$row" | cut -d',' -f3)
+
+        # Blink Project ID
+        proj="\e[5m$proj\e[0m"
+
+        printf "│ %-4s │ %-26s │ %-20s │ %-19s │\n" "$i" "$proj" "$name" "$ip"
+        ((i++))
+    done
+
+    printf "└──────┴────────────────────────────┴──────────────────────┴─────────────────────┘\n"
+
+    echo -e "\n${GREEN}${BOLD}✅ Finished listing all VMs${RESET}"
     read -p "Press Enter to continue..."
 }
 
