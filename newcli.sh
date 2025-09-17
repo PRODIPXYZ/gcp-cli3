@@ -6,6 +6,7 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 CYAN="\e[36m"
 MAGENTA="\e[35m"
+BLUE="\e[34m"
 BOLD='\033[1m'
 RESET="\e[0m"
 
@@ -160,89 +161,33 @@ auto_create_vms() {
     show_all_vms
 }
 
-# ---------- Show All VMs (Colorized Headers + Yellow Border) ----------
+# ---------- Show All VMs ----------
 show_all_vms() {
-    echo -e "\n${CYAN}${BOLD}💻  MADE BY PRODIP${RESET}\n"
-    echo -e "${YELLOW}${BOLD}=================================================${RESET}"
-    echo -e "         🌍 Listing ALL VMs Across Projects"
-    echo -e "${YELLOW}${BOLD}=================================================${RESET}\n"
+    echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
+    echo -e "${YELLOW}=============================================${RESET}"
+    echo -e "   🌐 ${BOLD}Listing ALL VMs Across Projects${RESET}"
+    echo -e "${YELLOW}=============================================${RESET}\n"
 
-    rows=""
-    sn=1
+    printf "${YELLOW}%-5s${RESET} ${BLUE}%-15s${RESET} ${GREEN}%-18s${RESET} ${MAGENTA}%-25s${RESET}\n" "S.No" "USERNAME" "IP" "PROJECT"
+    echo -e "${YELLOW}---------------------------------------------------------------------------------${RESET}"
+
+    i=1
     for proj in $(gcloud projects list --format="value(projectId)"); do
-        vms=$(gcloud compute instances list \
-            --project=$proj \
-            --format="csv(name,EXTERNAL_IP)" 2>/dev/null | tail -n +2)
-
-        while IFS=',' read -r name ip; do
-            [ -z "$name" ] && continue
-            rows+="$sn,$name,${ip:-—},$proj"$'\n'
-            ((sn++))
-        done <<< "$vms"
+        vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)")
+        if [ -n "$vms" ]; then
+            while read -r name ip; do
+                printf "%-5s %-15s %-18s %-25s\n" "$i" "$name" "$ip" "$proj"
+                ((i++))
+            done <<< "$vms"
+        fi
     done
 
-    if [ -z "$rows" ]; then
-        echo -e "${RED}${BOLD}❌ No VMs found across any projects.${RESET}"
-        read -p "Press Enter to continue..."
-        return
-    fi
-
-    echo -e "${YELLOW}"
-    printf "┌──────┬──────────────────────┬─────────────────────┬────────────────────────────┐\n"
-    printf "│ ${YELLOW}${BOLD}%-4s${RESET}${YELLOW} │ ${CYAN}${BOLD}%-20s${RESET}${YELLOW} │ ${GREEN}${BOLD}%-19s${RESET}${YELLOW} │ ${MAGENTA}${BOLD}%-26s${RESET}${YELLOW} │\n" "S.No" "USERNAME" "IP" "PROJECT"
-    printf "├──────┼──────────────────────┼─────────────────────┼────────────────────────────┤\n"
-
-    while IFS=',' read -r sn name ip proj; do
-        printf "│ %-4s │ %-20s │ %-19s │ %-26s │\n" "$sn" "$name" "$ip" "$proj"
-    done <<< "$rows"
-
-    printf "└──────┴──────────────────────┴─────────────────────┴────────────────────────────┘\n"
-    echo -e "${RESET}"
-
-    echo -e "\n${GREEN}${BOLD}✅ Finished listing all VMs${RESET}"
+    echo -e "${YELLOW}---------------------------------------------------------------------------------${RESET}"
+    echo -e "${GREEN}✅ Finished listing all VMs${RESET}"
     read -p "Press Enter to continue..."
 }
 
-# ---------- Show All Projects ----------
-show_all_projects() {
-    echo -e "${YELLOW}${BOLD}Listing All Projects:${RESET}"
-    gcloud projects list --format="table(projectId,name,createTime)"
-    read -p "Press Enter to continue..."
-}
-
-# ---------- Delete One VM ----------
-delete_one_vm() {
-    echo -e "${YELLOW}${BOLD}Deleting a Single VM...${RESET}"
-    gcloud projects list --format="table(projectId,name)"
-    read -p "Enter Project ID: " projid
-    gcloud compute instances list --project=$projid --format="table(name,zone,status)"
-    read -p "Enter VM Name to delete: " vmname
-    zone=$(gcloud compute instances list --project=$projid --filter="name=$vmname" --format="value(zone)")
-    if [ -z "$zone" ]; then
-        echo -e "${RED}VM not found!${RESET}"
-    else
-        gcloud compute instances delete $vmname --project=$projid --zone=$zone --quiet
-        echo -e "${GREEN}VM $vmname deleted successfully from project $projid.${RESET}"
-    fi
-    read -p "Press Enter to continue..."
-}
-
-# ---------- Auto Delete All VMs ----------
-delete_all_vms() {
-    echo -e "${RED}${BOLD}Deleting ALL VMs across ALL projects...${RESET}"
-    for proj in $(gcloud projects list --format="value(projectId)"); do
-        echo -e "${CYAN}${BOLD}Checking Project: $proj${RESET}"
-        mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)")
-        for vm in "${vms[@]}"; do
-            zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)")
-            gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet
-            echo -e "${GREEN}Deleted $vm from $proj${RESET}"
-        done
-    done
-    read -p "Press Enter to continue..."
-}
-
-# ---------- Connect VM (Box Style) ----------
+# ---------- Connect VM (Premium Table Style) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key to use for VM connections:${RESET}"
@@ -252,10 +197,16 @@ connect_vm() {
         echo -e "${GREEN}Termius key saved at $TERM_KEY_PATH${RESET}"
     fi
 
-    echo -e "${YELLOW}${BOLD}Fetching all VMs across all projects...${RESET}"
+    echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
+    echo -e "${YELLOW}=============================================${RESET}"
+    echo -e "   🔗 ${BOLD}Connect to VM (Box Style)${RESET}"
+    echo -e "${YELLOW}=============================================${RESET}\n"
 
     vm_list=()
     index=1
+
+    printf "${YELLOW}%-5s${RESET} ${BLUE}%-15s${RESET} ${GREEN}%-18s${RESET} ${MAGENTA}%-25s${RESET} ${CYAN}%-15s${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ZONE"
+    echo -e "${YELLOW}--------------------------------------------------------------------------------------------------${RESET}"
 
     for proj in $(gcloud projects list --format="value(projectId)"); do
         mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,zone,EXTERNAL_IP)")
@@ -264,11 +215,7 @@ connect_vm() {
             zone=$(echo $vm | awk '{print $2}')
             ip=$(echo $vm | awk '{print $3}')
             if [ -n "$name" ] && [ -n "$ip" ]; then
-                echo -e "${YELLOW}${BOLD}+----------------------------------------------------+${RESET}"
-                echo -e "${YELLOW}${BOLD}|${RESET} [${index}] VM: ${CYAN}${BOLD}$name${RESET}"
-                echo -e "${YELLOW}${BOLD}|${RESET} IP: ${GREEN}$ip${RESET}"
-                echo -e "${YELLOW}${BOLD}|${RESET} Project: ${MAGENTA}$proj${RESET}"
-                echo -e "${YELLOW}${BOLD}+----------------------------------------------------+${RESET}"
+                printf "%-5s %-15s %-18s %-25s %-15s\n" "$index" "$name" "$ip" "$proj" "$zone"
                 vm_list+=("$proj|$name|$zone|$ip")
                 ((index++))
             fi
@@ -276,12 +223,13 @@ connect_vm() {
     done
 
     if [ ${#vm_list[@]} -eq 0 ]; then
-        echo -e "${RED}No VMs found across projects!${RESET}"
+        echo -e "${RED}❌ No VMs found across projects!${RESET}"
         read -p "Press Enter to continue..."
         return
     fi
 
-    echo -e "${GREEN}${BOLD}Total VMs Found: ${#vm_list[@]}${RESET}"
+    echo -e "${YELLOW}--------------------------------------------------------------------------------------------------${RESET}"
+    echo -e "${GREEN}Total VMs Found: ${#vm_list[@]}${RESET}"
     echo "------------------------------------------------------"
     read -p "Enter VM number to connect: " choice
 
@@ -297,7 +245,7 @@ connect_vm() {
     zone=$(echo "$selected" | cut -d'|' -f3)
     ip=$(echo "$selected" | cut -d'|' -f4)
 
-    echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj...${RESET}"
+    echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj [Zone: $zone]...${RESET}"
     ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
     read -p "Press Enter to continue..."
 }
@@ -325,7 +273,7 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                     |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Premium Table)                  |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
