@@ -48,14 +48,37 @@ change_google_account() {
     read -p "Press Enter to continue..."
 }
 
+# ---------- Remove / Logout Google Account ----------
+remove_google_account() {
+    echo -e "${YELLOW}${BOLD}Available Accounts:${RESET}"
+    nl -w2 -s". " "$ACCOUNTS_FILE"
+
+    read -p "Enter account number to remove: " num
+    configname=$(sed -n "${num}p" "$ACCOUNTS_FILE")
+
+    if [ -z "$configname" ]; then
+        echo -e "${RED}Invalid choice!${RESET}"
+        read -p "Press Enter..."
+        return
+    fi
+
+    # Remove from accounts file
+    sed -i "${num}d" "$ACCOUNTS_FILE"
+
+    # Deactivate and delete configuration
+    gcloud config configurations deactivate "$configname" --quiet 2>/dev/null
+    gcloud config configurations delete "$configname" --quiet 2>/dev/null
+
+    echo -e "${GREEN}${BOLD}Account $configname removed successfully!${RESET}"
+    read -p "Press Enter..."
+}
+
 # ---------- Auto Project + Billing (2 Projects) ----------
 auto_create_projects() {
     echo -e "${YELLOW}${BOLD}Creating 2 Projects + Linking Billing...${RESET}"
 
     billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
-    if [ -z "$billing_id" ]; then
-        billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
-    fi
+    [ -z "$billing_id" ] && billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
 
     if [ -z "$billing_id" ]; then
         echo -e "${RED}${BOLD}❌ No Billing Account Detected!${RESET}"
@@ -92,7 +115,7 @@ auto_create_projects() {
     read -p "Press Enter..."
 }
 
-# ---------- Show All VMs (All Accounts, Premium Box Style) ----------
+# ---------- Show All VMs ----------
 show_all_vms() {
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
     echo -e "${YELLOW}=============================================${RESET}"
@@ -123,7 +146,7 @@ show_all_vms() {
     read -p "Press Enter..."
 }
 
-# ---------- Connect VM (All Accounts) ----------
+# ---------- Connect VM ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key:${RESET}"
@@ -185,10 +208,11 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create 2 Projects + Auto Billing       |"
     echo -e "${YELLOW}${BOLD}| [4] 🌍 Show All VMs (All Accounts)                 |"
     echo -e "${YELLOW}${BOLD}| [5] 🔗 Connect VM (All Accounts)                   |"
-    echo -e "${YELLOW}${BOLD}| [6] 🚪 Exit                                        |"
+    echo -e "${YELLOW}${BOLD}| [6] ❌ Remove / Logout Google Account              |"
+    echo -e "${YELLOW}${BOLD}| [7] 🚪 Exit                                        |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose [1-6]: " choice
+    read -p "Choose [1-7]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -196,7 +220,8 @@ while true; do
         3) auto_create_projects ;;
         4) show_all_vms ;;
         5) connect_vm ;;
-        6) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
+        6) remove_google_account ;;
+        7) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter..." ;;
     esac
 done
