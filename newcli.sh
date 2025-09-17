@@ -20,7 +20,8 @@ fresh_install() {
     sudo apt install -y curl wget git unzip python3 python3-pip docker.io
     sudo systemctl enable docker --now
 
-    if ! command -v gcloud &> /dev/null; then
+    if ! command -v gcloud &> /dev/null
+    then
         echo -e "${YELLOW}${BOLD}Gcloud CLI not found. Installing...${RESET}"
         curl https://sdk.cloud.google.com | bash
         exec -l $SHELL
@@ -42,9 +43,9 @@ change_google_account() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Project + Billing (2 Projects) ----------
+# ---------- Auto Project + Billing (3 Projects) ----------
 auto_create_projects() {
-    echo -e "${YELLOW}${BOLD}Creating 2 Projects + Linking Billing...${RESET}"
+    echo -e "${YELLOW}${BOLD}Creating 3 Projects + Linking Billing...${RESET}"
     billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
 
     if [ -z "$billing_id" ]; then
@@ -52,33 +53,42 @@ auto_create_projects() {
         return
     fi
 
-    for i in 1 2; do
+    for i in 1 2 3; do
         projid="auto-proj-$RANDOM"
         projname="auto-proj-$i"
         echo -e "${CYAN}${BOLD}➡️ Creating Project: $projid ($projname)${RESET}"
 
-        if gcloud projects create "$projid" --name="$projname" --quiet; then
-            echo -e "${GREEN}✔️ Project $projid created.${RESET}"
+        gcloud projects create "$projid" --name="$projname" --quiet
 
-            echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id...${RESET}"
-            if gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet; then
-                echo -e "${GREEN}✔️ Billing linked to $projid${RESET}"
+        # Wait until project is ready
+        for retry in {1..5}; do
+            if gcloud projects describe "$projid" &>/dev/null; then
+                echo -e "${GREEN}✔️ Project $projid is active.${RESET}"
+                break
             else
-                echo -e "${RED}❌ Failed to link billing for $projid${RESET}"
-                continue
+                echo -e "${RED}⏳ Project not ready yet (try $retry)... waiting 10s${RESET}"
+                sleep 10
             fi
+        done
 
-            echo -e "${YELLOW}Enabling Compute Engine API for $projid...${RESET}"
-            gcloud services enable compute.googleapis.com --project="$projid" --quiet
-
-            echo -e "${GREEN}${BOLD}✅ Project $projid ready with billing & API enabled.${RESET}"
+        # Link Billing
+        echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id...${RESET}"
+        if gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet; then
+            echo -e "${GREEN}✔️ Billing linked to $projid${RESET}"
         else
-            echo -e "${RED}❌ Failed to create project $projid${RESET}"
+            echo -e "${RED}❌ Failed to link billing for $projid${RESET}"
+            continue
         fi
+
+        # Enable Compute API
+        echo -e "${YELLOW}Enabling Compute Engine API for $projid...${RESET}"
+        gcloud services enable compute.googleapis.com --project="$projid" --quiet
+
+        echo -e "${GREEN}${BOLD}✅ Project $projid ready with billing & API enabled.${RESET}"
         echo "--------------------------------------------------"
     done
 
-    echo -e "${GREEN}${BOLD}✅ Finished creating 2 projects with billing & API enabled.${RESET}"
+    echo -e "${GREEN}${BOLD}✅ Finished creating 3 projects with billing & API enabled.${RESET}"
     read -p "Press Enter to continue..."
 }
 
@@ -89,7 +99,7 @@ show_billing_accounts() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create (Billing Linked Projects Only) ----------
+# ---------- Auto VM Create (Only Billing Linked Projects) ----------
 auto_create_vms() {
     echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
     read pubkey
@@ -99,19 +109,19 @@ auto_create_vms() {
     disksize="60"
 
     billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
-    projects=$(gcloud beta billing projects list --billing-account="$billing_id" --format="value(projectId)" | head -n 2)
+    projects=$(gcloud beta billing projects list --billing-account=$billing_id --format="value(projectId)" | head -n 3)
 
     if [ -z "$projects" ]; then
-        echo -e "${RED}${BOLD}❌ No billing-linked projects found! Please create projects first.${RESET}"
+        echo -e "${RED}${BOLD}❌ No billing-linked projects found!${RESET}"
         return
     fi
 
-    echo -e "${CYAN}${BOLD}Auto-Detected Billing-Linked Projects:${RESET}"
+    echo -e "${CYAN}${BOLD}Billing-Linked Projects:${RESET}"
     echo "$projects"
 
-    echo -e "${CYAN}${BOLD}Enter 4 VM Names (these will also be SSH usernames)...${RESET}"
+    echo -e "${CYAN}${BOLD}Enter 6 VM Names (these will also be SSH usernames)...${RESET}"
     vmnames=()
-    for i in {1..4}; do
+    for i in {1..6}; do
         read -p "Enter VM Name #$i: " name
         vmnames+=("$name")
     done
@@ -121,7 +131,7 @@ auto_create_vms() {
         gcloud config set project $proj > /dev/null 2>&1
         echo -e "${CYAN}${BOLD}Switched to Project: $proj${RESET}"
 
-        gcloud services enable compute.googleapis.com --project="$proj" --quiet
+        gcloud services enable compute.googleapis.com --project=$proj --quiet
 
         for j in {1..2}; do
             vmname="${vmnames[$count]}"
@@ -140,7 +150,7 @@ auto_create_vms() {
         done
     done
 
-    echo -e "${GREEN}${BOLD}✅ All VMs Created Successfully in Billing-Linked Projects!${RESET}"
+    echo -e "${GREEN}${BOLD}✅ All 6 VMs Created Successfully Across Billing-Linked Projects!${RESET}"
     echo
     show_all_vms
 }
@@ -279,15 +289,15 @@ disconnect_vm() {
 while true; do
     clear
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${CYAN}${BOLD}|           GCP CLI MENU (ASISH AND PRODIP)          |"
+    echo -e "${CYAN}${BOLD}|           GCP CLI MENU (ASISH AND PRODIP)         |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Change / Login Google Account               |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (2) + Auto Billing     |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 4 VMs (2 per Project)           |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create 3 Projects + Billing Link       |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (Only Billing Linked)     |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                     |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                      |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
