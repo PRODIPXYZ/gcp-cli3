@@ -52,7 +52,7 @@ auto_create_projects() {
         return
     fi
 
-    for i in {1..2}; do
+    for i in 1 2; do
         projid="auto-proj-$RANDOM"
         projname="auto-proj-$i"
         echo -e "${CYAN}${BOLD}➡️ Creating Project: $projid ($projname)${RESET}"
@@ -61,12 +61,17 @@ auto_create_projects() {
             echo -e "${GREEN}✔️ Project $projid created.${RESET}"
 
             echo -e "${GREEN}${BOLD}Linking Billing Account $billing_id...${RESET}"
-            gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
+            if gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet; then
+                echo -e "${GREEN}✔️ Billing linked to $projid${RESET}"
+            else
+                echo -e "${RED}❌ Failed to link billing for $projid${RESET}"
+                continue
+            fi
 
             echo -e "${YELLOW}Enabling Compute Engine API for $projid...${RESET}"
             gcloud services enable compute.googleapis.com --project="$projid" --quiet
 
-            echo -e "${GREEN}${BOLD}Project $projid ready with billing & API enabled.${RESET}"
+            echo -e "${GREEN}${BOLD}✅ Project $projid ready with billing & API enabled.${RESET}"
         else
             echo -e "${RED}❌ Failed to create project $projid${RESET}"
         fi
