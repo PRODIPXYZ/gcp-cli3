@@ -46,10 +46,20 @@ change_google_account() {
 # ---------- Auto Project + Billing (3 Projects) ----------
 auto_create_projects() {
     echo -e "${YELLOW}${BOLD}Creating 3 Projects + Linking Billing...${RESET}"
+
+    # Detect billing
     billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
 
     if [ -z "$billing_id" ]; then
-        echo -e "${RED}${BOLD}❌ No Billing Account Found!${RESET}"
+        echo -e "${RED}${BOLD}❌ No Billing Account Detected!${RESET}"
+        echo -e "${CYAN}Available Billing Accounts:${RESET}"
+        gcloud beta billing accounts list --format="table(displayName,accountId,open)"
+        read -p "Enter Billing Account ID manually: " billing_id
+    fi
+
+    if [ -z "$billing_id" ]; then
+        echo -e "${RED}${BOLD}❌ Still no billing ID provided. Cannot continue.${RESET}"
+        read -p "Press Enter to continue..."
         return
     fi
 
@@ -58,10 +68,13 @@ auto_create_projects() {
         projname="auto-proj-$i"
         echo -e "${CYAN}${BOLD}➡️ Creating Project: $projid ($projname)${RESET}"
 
-        gcloud projects create "$projid" --name="$projname" --quiet
+        if ! gcloud projects create "$projid" --name="$projname" --quiet; then
+            echo -e "${RED}❌ Failed to create project $projid${RESET}"
+            continue
+        fi
 
         # Wait until project is ready
-        for retry in {1..5}; do
+        for retry in {1..6}; do
             if gcloud projects describe "$projid" &>/dev/null; then
                 echo -e "${GREEN}✔️ Project $projid is active.${RESET}"
                 break
@@ -88,7 +101,7 @@ auto_create_projects() {
         echo "--------------------------------------------------"
     done
 
-    echo -e "${GREEN}${BOLD}✅ Finished creating 3 projects with billing & API enabled.${RESET}"
+    echo -e "${GREEN}${BOLD}✅ Finished creating up to 3 projects with billing & API enabled.${RESET}"
     read -p "Press Enter to continue..."
 }
 
@@ -99,7 +112,7 @@ show_billing_accounts() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create (Only Billing Linked Projects) ----------
+# ---------- Auto VM Create (Billing-Linked Only) ----------
 auto_create_vms() {
     echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
     read pubkey
@@ -112,7 +125,7 @@ auto_create_vms() {
     projects=$(gcloud beta billing projects list --billing-account=$billing_id --format="value(projectId)" | head -n 3)
 
     if [ -z "$projects" ]; then
-        echo -e "${RED}${BOLD}❌ No billing-linked projects found!${RESET}"
+        echo -e "${RED}${BOLD}❌ No billing-linked projects found! Please create projects first.${RESET}"
         return
     fi
 
@@ -214,7 +227,7 @@ delete_all_vms() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Connect VM (Box Style, Yellow Borders) ----------
+# ---------- Connect VM (Box Style) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key to use for VM connections:${RESET}"
@@ -289,15 +302,15 @@ disconnect_vm() {
 while true; do
     clear
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${CYAN}${BOLD}|           GCP CLI MENU (ASISH AND PRODIP)         |"
+    echo -e "${CYAN}${BOLD}|         GCP CLI MENU (ASISH AND PRODIP)           |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Change / Login Google Account               |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create 3 Projects + Billing Link       |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (Only Billing Linked)     |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create Projects (3) + Auto Billing     |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create 6 VMs (2 per Project)           |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                      |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                     |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
