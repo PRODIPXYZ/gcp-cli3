@@ -78,90 +78,207 @@ change_google_account() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Create Projects (Default + 2 new) ----------
+# ---------- Auto Create Projects (with account selection) ----------
 auto_create_projects() {
-    echo -e "${YELLOW}${BOLD}Creating 2 Projects + Linking Billing...${RESET}"
-    billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
-    if [ -z "$billing_id" ]; then
-        echo -e "${RED}❌ No Billing Account Found.${RESET}"
-        return
-    fi
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${CYAN}${BOLD}|          CREATE PROJECTS - ACCOUNT SELECTION      |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${YELLOW}${BOLD}| [1] 📁 Create Projects in ONE Account             |"
+    echo -e "${YELLOW}${BOLD}| [2] 📁 Create Projects in ALL Logged-in Accounts  |"
+    echo -e "${YELLOW}${BOLD}| [3] 🔙 Back                                       |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo
+    read -p "Choose an option [1-3]: " project_choice
 
-    # Link billing to default project if not already
-    default_project=$(gcloud projects list --filter="lifecycleState:ACTIVE" --format="value(projectId)" | head -n1)
-    if [ -n "$default_project" ]; then
-        billing_enabled=$(gcloud beta billing projects describe "$default_project" --format="value(billingEnabled)" 2>/dev/null)
-        if [ "$billing_enabled" != "True" ]; then
-            echo -e "${CYAN}Linking billing to default project: $default_project${RESET}"
-            gcloud beta billing projects link "$default_project" --billing-account "$billing_id" --quiet
-            gcloud services enable compute.googleapis.com --project="$default_project" --quiet
-        fi
-    fi
+    case $project_choice in
+        1)
+            list_google_accounts || return 1
+            read -p "Enter account number to create projects: " acc_choice
+            selected_acc="${accounts_list[$acc_choice]}"
+            if [ -z "$selected_acc" ]; then
+                echo -e "${RED}Invalid choice!${RESET}"
+                read -p "Press Enter to continue..."
+                return
+            fi
+            
+            echo -e "${CYAN}Creating projects in account: ${BOLD}$selected_acc${RESET}"
+            gcloud config set account "$selected_acc" --quiet
 
-    # Create 2 new projects
-    for i in 1 2; do
-        projid="auto-proj-$RANDOM"
-        projname="auto-proj-$i"
-        echo -e "${CYAN}➡️ Creating Project: $projid ($projname)${RESET}"
-        gcloud projects create "$projid" --name="$projname" --quiet || continue
-        gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet || continue
-        gcloud services enable compute.googleapis.com --project="$projid" --quiet
-        echo -e "${GREEN}✔ Project $projid ready.${RESET}"
-    done
-    read -p "Press Enter to continue..."
+            billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+            if [ -z "$billing_id" ]; then
+                echo -e "${RED}❌ No Billing Account Found for this account.${RESET}"
+                read -p "Press Enter to continue..."
+                return
+            fi
+
+            for i in 1 2 3; do
+                projid="auto-proj-$RANDOM"
+                projname="auto-proj-$i"
+                echo -e "${CYAN}➡️ Creating Project: $projid ($projname)${RESET}"
+                gcloud projects create "$projid" --name="$projname" --quiet || continue
+                gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet || continue
+                gcloud services enable compute.googleapis.com --project="$projid" --quiet
+                echo -e "${GREEN}✔ Project $projid ready.${RESET}"
+            done
+            read -p "Press Enter to continue..."
+            ;;
+        2)
+            echo -e "${CYAN}Creating projects in ALL logged-in accounts...${RESET}"
+            for acc in $(gcloud auth list --format="value(account)"); do
+                echo -e "\n${BOLD}🔄 Now working on account: $acc${RESET}"
+                gcloud config set account "$acc" --quiet
+                
+                billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+                if [ -z "$billing_id" ]; then
+                    echo -e "${YELLOW}⚠️ No Billing Account found for this account. Skipping.${RESET}"
+                    continue
+                fi
+
+                for i in 1 2 3; do
+                    projid="auto-proj-$RANDOM"
+                    projname="auto-proj-$i"
+                    echo -e "${CYAN}➡️ Creating Project: $projid ($projname)${RESET}"
+                    gcloud projects create "$projid" --name="$projname" --quiet || continue
+                    gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet || continue
+                    gcloud services enable compute.googleapis.com --project="$projid" --quiet
+                    echo -e "${GREEN}✔ Project $projid ready.${RESET}"
+                done
+            done
+            read -p "Press Enter to continue..."
+            ;;
+        3)
+            return
+            ;;
+        *)
+            echo -e "${RED}Invalid choice!${RESET}"
+            read -p "Press Enter to continue..."
+            ;;
+    esac
 }
 
-# ---------- Auto VM Create (Always 6 VMs) ----------
+# ---------- Auto VM Create (with account selection) ----------
 auto_create_vms() {
-    echo -e "${YELLOW}Enter your SSH Public Key (only key part):${RESET}"
-    read pubkey
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${CYAN}${BOLD}|             CREATE VMs - ACCOUNT SELECTION        |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${YELLOW}${BOLD}| [1] 🚀 Create VMs in ONE Account                  |"
+    echo -e "${YELLOW}${BOLD}| [2] 🚀 Create VMs in ALL Logged-in Accounts       |"
+    echo -e "${YELLOW}${BOLD}| [3] 🔙 Back                                       |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo
+    read -p "Choose an option [1-3]: " vm_choice
 
-    zone="asia-southeast1-b"
-    mtype="n2d-custom-4-25600"
-    disksize="60"
-    billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+    case $vm_choice in
+        1)
+            list_google_accounts || return 1
+            read -p "Enter account number to create VMs: " acc_choice
+            selected_acc="${accounts_list[$acc_choice]}"
+            if [ -z "$selected_acc" ]; then
+                echo -e "${RED}Invalid choice!${RESET}"
+                read -p "Press Enter to continue..."
+                return
+            fi
+            
+            echo -e "${CYAN}Creating VMs in account: ${BOLD}$selected_acc${RESET}"
+            gcloud config set account "$selected_acc" --quiet
+            
+            zone="asia-southeast1-b"
+            mtype="n2d-custom-4-25600"
+            disksize="60"
+            read -p "Enter your SSH Public Key (only key part): " pubkey
+            
+            projects=$(gcloud beta billing projects list --format="value(projectId)")
+            
+            if [ -z "$projects" ]; then
+                echo -e "${RED}❌ No billing-linked projects found in this account.${RESET}"
+                read -p "Press Enter to continue..."
+                return
+            fi
 
-    # Default project detect & auto billing link if needed
-    default_project=$(gcloud projects list --filter="lifecycleState:ACTIVE" --format="value(projectId)" | head -n1)
-    if [ -n "$default_project" ]; then
-        billing_enabled=$(gcloud beta billing projects describe "$default_project" --format="value(billingEnabled)" 2>/dev/null)
-        if [ "$billing_enabled" != "True" ]; then
-            echo -e "${CYAN}Auto linking billing to default project: $default_project${RESET}"
-            gcloud beta billing projects link "$default_project" --billing-account "$billing_id" --quiet
-            gcloud services enable compute.googleapis.com --project="$default_project" --quiet
-        fi
-    fi
+            echo -e "${CYAN}${BOLD}Enter 6 VM Names:${RESET}"
+            vmnames=()
+            for i in {1..6}; do
+                read -p "VM #$i: " name
+                vmnames+=("$name")
+            done
 
-    # Final 3 projects = default + 2 billing linked
-    projects="$default_project
-$(gcloud beta billing projects list --billing-account=$billing_id --format="value(projectId)" | head -n2)"
+            count=0
+            for proj in $projects; do
+                if [ $count -ge 6 ]; then break; fi
+                gcloud config set project $proj > /dev/null 2>&1
+                for j in {1..2}; do
+                    if [ $count -ge 6 ]; then break; fi
+                    vmname="${vmnames[$count]}"
+                    echo -e "${GREEN}Creating VM $vmname in $proj...${RESET}"
+                    gcloud compute instances create $vmname \
+                        --zone=$zone --machine-type=$mtype \
+                        --image-family=ubuntu-2404-lts-amd64 \
+                        --image-project=ubuntu-os-cloud \
+                        --boot-disk-size=${disksize}GB \
+                        --boot-disk-type=pd-balanced \
+                        --metadata ssh-keys="${vmname}:${pubkey}" \
+                        --tags=http-server,https-server --quiet
+                    ((count++))
+                done
+            done
+            echo -e "${GREEN}✔ All 6 VMs Created Successfully!${RESET}"
+            read -p "Press Enter to continue..."
+            ;;
+        2)
+            zone="asia-southeast1-b"
+            mtype="n2d-custom-4-25600"
+            disksize="60"
+            read -p "Enter your SSH Public Key (only key part): " pubkey
 
-    echo -e "${CYAN}${BOLD}Enter 6 VM Names:${RESET}"
-    vmnames=()
-    for i in {1..6}; do
-        read -p "VM #$i: " name
-        vmnames+=("$name")
-    done
+            echo -e "${CYAN}${BOLD}Enter 6 VM Names:${RESET}"
+            vmnames=()
+            for i in {1..6}; do
+                read -p "VM #$i: " name
+                vmnames+=("$name")
+            done
 
-    count=0
-    for proj in $projects; do
-        gcloud config set project $proj > /dev/null 2>&1
-        for j in {1..2}; do
-            vmname="${vmnames[$count]}"
-            echo -e "${GREEN}Creating VM $vmname in $proj...${RESET}"
-            gcloud compute instances create $vmname \
-                --zone=$zone --machine-type=$mtype \
-                --image-family=ubuntu-2404-lts-amd64 \
-                --image-project=ubuntu-os-cloud \
-                --boot-disk-size=${disksize}GB \
-                --boot-disk-type=pd-balanced \
-                --metadata ssh-keys="${vmname}:${pubkey}" \
-                --tags=http-server,https-server --quiet
-            ((count++))
-        done
-    done
-    echo -e "${GREEN}✔ All 6 VMs Created Successfully!${RESET}"
-    read -p "Press Enter to continue..."
+            count=0
+            for acc in $(gcloud auth list --format="value(account)"); do
+                echo -e "\n${BOLD}🔄 Now working on account: $acc${RESET}"
+                gcloud config set account "$acc" --quiet
+                
+                projects=$(gcloud beta billing projects list --format="value(projectId)")
+                
+                if [ -z "$projects" ]; then
+                    echo -e "${YELLOW}⚠️ No billing-linked projects found. Skipping this account.${RESET}"
+                    continue
+                fi
+
+                for proj in $projects; do
+                    if [ $count -ge 6 ]; then break; fi
+                    gcloud config set project $proj > /dev/null 2>&1
+                    for j in {1..2}; do
+                        if [ $count -ge 6 ]; then break; fi
+                        vmname="${vmnames[$count]}"
+                        echo -e "${GREEN}Creating VM $vmname in $proj...${RESET}"
+                        gcloud compute instances create $vmname \
+                            --zone=$zone --machine-type=$mtype \
+                            --image-family=ubuntu-2404-lts-amd64 \
+                            --image-project=ubuntu-os-cloud \
+                            --boot-disk-size=${disksize}GB \
+                            --boot-disk-type=pd-balanced \
+                            --metadata ssh-keys="${vmname}:${pubkey}" \
+                            --tags=http-server,https-server --quiet
+                        ((count++))
+                    done
+                done
+            done
+            echo -e "${GREEN}✔ All 6 VMs Created Successfully!${RESET}"
+            read -p "Press Enter to continue..."
+            ;;
+        3)
+            return
+            ;;
+        *)
+            echo -e "${RED}Invalid choice!${RESET}"
+            read -p "Press Enter to continue..."
+            ;;
+    esac
 }
 
 # ---------- Add Extra 2 VMs in Existing Project ----------
@@ -360,21 +477,21 @@ connect_vm() {
 while true; do
     clear
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${CYAN}${BOLD}|           GCP CLI MENU (ASISH AND PRODIP)         |"
+    echo -e "${CYAN}${BOLD}|         GCP CLI MENU (ASISH AND PRODIP)           |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
-    echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)   |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Create 2 Projects (Billing Linked)          |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create 6 VMs (Default+2 Projects)           |"
-    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs                                |"
-    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM                                  |"
-    echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
-    echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
-    echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)              |"
-    echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                      |"
-    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                       |"
-    echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                      |"
+    echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)  |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects (Account Select)           |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VMs (Account Select)                |"
+    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs                               |"
+    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                          |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM                                 |"
+    echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM (Remove saved info)          |"
+    echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                              |"
+    echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)             |"
+    echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                     |"
+    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                      |"
+    echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                     |"
     echo -e "${YELLOW}${BOLD}| [14] ➕ Add Extra 2 VMs in Existing Project        |"
     echo -e "${YELLOW}${BOLD}| [15] ➕ Create 2 VMs in Any Project                |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
