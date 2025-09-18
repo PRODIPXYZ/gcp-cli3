@@ -16,7 +16,6 @@ TERM_KEY_PATH="$HOME/.ssh/termius_vm_key"
 
 # ---------- List Google Accounts ----------
 list_google_accounts() {
-    echo -e "\n${CYAN}${BOLD}📧 Available Google Accounts${RESET}\n"
     accounts=$(gcloud auth list --format="value(account)")
     if [ -z "$accounts" ]; then
         echo -e "${RED}❌ No Google accounts found. Please login first.${RESET}"
@@ -57,14 +56,10 @@ fresh_install() {
     sudo systemctl enable docker --now
 
     if ! command -v gcloud &> /dev/null; then
-        echo -e "${YELLOW}${BOLD}Gcloud CLI not found. Installing...${RESET}"
         curl https://sdk.cloud.google.com | bash
         exec -l $SHELL
-    else
-        echo -e "${GREEN}${BOLD}Gcloud CLI already installed.${RESET}"
     fi
 
-    echo -e "${YELLOW}${BOLD}Now login to your Google Account:${RESET}"
     gcloud auth login
     echo -e "${GREEN}${BOLD}Setup complete!${RESET}"
     read -p "Press Enter to continue..."
@@ -72,7 +67,6 @@ fresh_install() {
 
 # ---------- Change / Add Google Account ----------
 change_google_account() {
-    echo -e "${YELLOW}${BOLD}Login to a new Google Account...${RESET}"
     gcloud auth login
     echo -e "${GREEN}${BOLD}✔ Account added successfully!${RESET}"
     read -p "Press Enter to continue..."
@@ -201,7 +195,7 @@ create_vm_all_accounts() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- আপনার আগের show_all_vms, connect_vm, add_extra_vms, create_2_vms_in_project সব 그대로 থাকবে ----------
+# ---------- আপনার আগের show_all_vms, connect_vm, add_extra_vms, create_2_vms_in_project 그대로 রাখবেন ----------
 
 # ---------- Main Menu ----------
 while true; do
@@ -209,25 +203,25 @@ while true; do
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${CYAN}${BOLD}|           GCP CLI MENU (ASISH AND PRODIP)         |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
-    echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)   |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects                             |"
-    echo -e "${YELLOW}${BOLD}|      [1] One Account                               |"
-    echo -e "${YELLOW}${BOLD}|      [2] All Accounts                              |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VMs                                  |"
-    echo -e "${YELLOW}${BOLD}|      [1] One Account                               |"
-    echo -e "${YELLOW}${BOLD}|      [2] All Accounts                              |"
-    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs                                |"
-    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM                                  |"
-    echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
-    echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
-    echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)              |"
-    echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                      |"
-    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                       |"
-    echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                      |"
-    echo -e "${YELLOW}${BOLD}| [14] ➕ Add Extra 2 VMs in Existing Project        |"
-    echo -e "${YELLOW}${BOLD}| [15] ➕ Create 2 VMs in Any Project                |"
+    echo -e "${YELLOW}${BOLD}| [1] Fresh Install + CLI Setup                     |"
+    echo -e "${YELLOW}${BOLD}| [2] Add / Change Google Account                   |"
+    echo -e "${YELLOW}${BOLD}| [3] Create Projects                               |"
+    echo -e "${YELLOW}${BOLD}|      [1] One Account                              |"
+    echo -e "${YELLOW}${BOLD}|      [2] All Accounts                             |"
+    echo -e "${YELLOW}${BOLD}| [4] Create VMs                                    |"
+    echo -e "${YELLOW}${BOLD}|      [1] One Account                              |"
+    echo -e "${YELLOW}${BOLD}|      [2] All Accounts                             |"
+    echo -e "${YELLOW}${BOLD}| [5] Show All VMs                                  |"
+    echo -e "${YELLOW}${BOLD}| [6] Show All Projects                             |"
+    echo -e "${YELLOW}${BOLD}| [7] Connect VM                                    |"
+    echo -e "${YELLOW}${BOLD}| [8] Disconnect VM                                 |"
+    echo -e "${YELLOW}${BOLD}| [9] Delete ONE VM                                 |"
+    echo -e "${YELLOW}${BOLD}| [10] Delete ALL VMs                               |"
+    echo -e "${YELLOW}${BOLD}| [11] Show Billing Accounts                        |"
+    echo -e "${YELLOW}${BOLD}| [12] Exit                                         |"
+    echo -e "${YELLOW}${BOLD}| [13] Logout Google Account                        |"
+    echo -e "${YELLOW}${BOLD}| [14] Add Extra 2 VMs in Existing Project          |"
+    echo -e "${YELLOW}${BOLD}| [15] Create 2 VMs in Any Project                  |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
     read -p "Choose an option [1-15]: " choice
@@ -235,43 +229,19 @@ while true; do
     case $choice in
         1) fresh_install ;;
         2) change_google_account ;;
-        3)
-            echo -e "${CYAN}[3] Create Projects Options:${RESET}"
-            echo "1) One Account"
-            echo "2) All Accounts"
-            read -p "Choose: " subchoice
-            case $subchoice in
-                1) create_project_one_account ;;
-                2) create_project_all_accounts ;;
-                *) echo "Invalid choice";;
-            esac
-            ;;
-        4)
-            echo -e "${CYAN}[4] Create VMs Options:${RESET}"
-            echo "1) One Account"
-            echo "2) All Accounts"
-            read -p "Choose: " subchoice
-            case $subchoice in
-                1) create_vm_one_account ;;
-                2) create_vm_all_accounts ;;
-                *) echo "Invalid choice";;
-            esac
-            ;;
+        3) echo "1) One Account"; echo "2) All Accounts"; read -p "Choose: " sub; [ "$sub" = "1" ] && create_project_one_account || create_project_all_accounts ;;
+        4) echo "1) One Account"; echo "2) All Accounts"; read -p "Choose: " sub; [ "$sub" = "1" ] && create_vm_one_account || create_vm_all_accounts ;;
         5) show_all_vms ;;
-        6) for acc in $(gcloud auth list --format="value(account)"); do
-               gcloud config set account "$acc" > /dev/null 2>&1
-               echo -e "${CYAN}${BOLD}Account: $acc${RESET}"
-               gcloud projects list --format="table(projectId,name,createTime)"
-           done ; read -p "Press Enter..." ;;
+        6) for acc in $(gcloud auth list --format="value(account)"); do gcloud config set account "$acc" >/dev/null 2>&1; echo "Account: $acc"; gcloud projects list --format="table(projectId,name,createTime)"; done; read -p "Press Enter..." ;;
         7) connect_vm ;;
-        8) if [ -f "$SSH_INFO_FILE" ]; then rm "$SSH_INFO_FILE"; echo -e "${GREEN}VM disconnected.${RESET}"; else echo -e "${YELLOW}No active VM.${RESET}"; fi; read -p "Press Enter..." ;;
+        8) if [ -f "$SSH_INFO_FILE" ]; then rm "$SSH_INFO_FILE"; echo "VM disconnected."; else echo "No active VM."; fi; read -p "Press Enter..." ;;
         9) gcloud projects list --format="table(projectId,name)" ; read -p "Enter PID: " projid ; gcloud compute instances list --project=$projid --format="table(name,zone,status)" ; read -p "Enter VM: " vmname ; zone=$(gcloud compute instances list --project=$projid --filter="name=$vmname" --format="value(zone)") ; gcloud compute instances delete $vmname --project=$projid --zone=$zone --quiet ;;
-        10) for acc in $(gcloud auth list --format="value(account)"); do gcloud config set account "$acc" > /dev/null 2>&1 ; for proj in $(gcloud projects list --format="value(projectId)"); do billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null); if [ "$billing_enabled" != "True" ]; then continue; fi; mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)" 2>/dev/null); for vm in "${vms[@]}"; do zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)" 2>/dev/null); gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet; done; done; done ;;
+        10) for acc in $(gcloud auth list --format="value(account)"); do gcloud config set account "$acc" >/dev/null 2>&1 ; for proj in $(gcloud projects list --format="value(projectId)"); do mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)" 2>/dev/null); for vm in "${vms[@]}"; do zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)" 2>/dev/null); gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet; done; done; done ;;
         11) gcloud beta billing accounts list --format="table(displayName,accountId,ACCOUNT_ID,open)" ; read -p "Press Enter..." ;;
-        12) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
+        12) exit 0 ;;
         13) logout_google_account ;;
         14) add_extra_vms ;;
         15) create_2_vms_in_project ;;
-        *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter..." ;;
+        *) echo "Invalid choice"; read -p "Press Enter..." ;;
     esac
 done
