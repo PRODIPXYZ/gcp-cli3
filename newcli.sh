@@ -49,6 +49,20 @@ select_google_account() {
     return 0
 }
 
+# ---------- Logout Google Account ----------
+logout_google_account() {
+    list_google_accounts || return 1
+    read -p "Enter account number to logout: " choice
+    selected="${accounts_list[$choice]}"
+    if [ -z "$selected" ]; then
+        echo -e "${RED}Invalid choice!${RESET}"
+        return 1
+    fi
+    gcloud auth revoke "$selected" --quiet
+    echo -e "${GREEN}✔ Logged out from $selected${RESET}"
+    read -p "Press Enter to continue..."
+}
+
 # ---------- Fresh Install ----------
 fresh_install() {
     echo -e "${CYAN}${BOLD}Running Fresh Install + CLI Setup...${RESET}"
@@ -94,7 +108,7 @@ auto_create_projects_menu() {
     esac
 }
 
-# ---------- Auto Create Projects (per account, 2 only) ----------
+# ---------- Auto Create Projects (2 Only) ----------
 auto_create_projects() {
     echo -e "${YELLOW}${BOLD}Creating 2 Projects + Linking Billing...${RESET}"
 
@@ -133,7 +147,7 @@ auto_create_vms_menu() {
     esac
 }
 
-# ---------- Auto VM Create (per account) ----------
+# ---------- Auto VM Create (6 total per account) ----------
 auto_create_vms() {
     echo -e "${YELLOW}Enter your SSH Public Key (only key part):${RESET}"
     read pubkey
@@ -142,7 +156,7 @@ auto_create_vms() {
     mtype="n2d-custom-4-25600"
     disksize="60"
 
-    projects=$(gcloud projects list --format="value(projectId)" | head -n 2)
+    projects=$(gcloud projects list --format="value(projectId)" | head -n 3)
     if [ -z "$projects" ]; then
         echo -e "${RED}No projects found!${RESET}"
         return
@@ -176,34 +190,32 @@ auto_create_vms() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Show All VMs (Premium Box Style) ----------
+# ---------- Show All VMs (ALL Accounts, Box Style) ----------
 show_all_vms() {
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
-    echo -e "${YELLOW}=============================================${RESET}"
-    echo -e "   🌐 ${BOLD}Listing ALL VMs Across Projects${RESET}"
-    echo -e "${YELLOW}=============================================${RESET}\n"
-
-    printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "S.No" "USERNAME" "IP" "PROJECT"
-    printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┤${RESET}\n"
+    printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬───────────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-31s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
+    printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
 
     i=1
-    for proj in $(gcloud projects list --format="value(projectId)"); do
-        vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)")
-        if [ -n "$vms" ]; then
-            while read -r name ip; do
-                printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj"
-                ((i++))
-            done <<< "$vms"
-        fi
+    for acc in $(gcloud auth list --format="value(account)"); do
+        gcloud config set account "$acc" > /dev/null 2>&1
+        for proj in $(gcloud projects list --format="value(projectId)"); do
+            vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)")
+            if [ -n "$vms" ]; then
+                while read -r name ip; do
+                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj" "$acc"
+                    ((i++))
+                done <<< "$vms"
+            fi
+        done
     done
 
-    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┘${RESET}\n"
-    echo -e "${GREEN}✅ Finished listing all VMs${RESET}"
+    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴───────────────────────────────┘${RESET}\n"
     read -p "Press Enter to continue..."
 }
 
-# ---------- Connect VM (Premium Box Style + Zone) ----------
+# ---------- Connect VM (ALL Accounts, Box Style, No Zone) ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key to use for VM connections:${RESET}"
@@ -214,55 +226,45 @@ connect_vm() {
     fi
 
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
-    echo -e "${YELLOW}=============================================${RESET}"
-    echo -e "   🔗 ${BOLD}Connect to VM (Box Style)${RESET}"
-    echo -e "${YELLOW}=============================================${RESET}\n"
-
     vm_list=()
     index=1
 
-    printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬──────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-14s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ZONE"
-    printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼──────────────┤${RESET}\n"
+    printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬───────────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-31s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
+    printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
 
-    for proj in $(gcloud projects list --format="value(projectId)"); do
-        mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,zone,EXTERNAL_IP)")
-        for vm in "${vms[@]}"; do
-            name=$(echo $vm | awk '{print $1}')
-            zone=$(echo $vm | awk '{print $2}')
-            ip=$(echo $vm | awk '{print $3}')
-            if [ -n "$name" ] && [ -n "$ip" ]; then
-                printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-14s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$zone"
-                vm_list+=("$proj|$name|$zone|$ip")
-                ((index++))
-            fi
+    for acc in $(gcloud auth list --format="value(account)"); do
+        gcloud config set account "$acc" > /dev/null 2>&1
+        for proj in $(gcloud projects list --format="value(projectId)"); do
+            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)")
+            for vm in "${vms[@]}"; do
+                name=$(echo $vm | awk '{print $1}')
+                ip=$(echo $vm | awk '{print $2}')
+                if [ -n "$name" ] && [ -n "$ip" ]; then
+                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$acc"
+                    vm_list+=("$acc|$proj|$name|$ip")
+                    ((index++))
+                fi
+            done
         done
     done
 
     if [ ${#vm_list[@]} -eq 0 ]; then
-        echo -e "${RED}❌ No VMs found across projects!${RESET}"
+        echo -e "${RED}❌ No VMs found across accounts!${RESET}"
         read -p "Press Enter to continue..."
         return
     fi
 
-    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴──────────────┘${RESET}\n"
-    echo -e "${GREEN}Total VMs Found: ${#vm_list[@]}${RESET}"
-
+    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴───────────────────────────────┘${RESET}\n"
     read -p "Enter VM number to connect: " choice
 
-    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#vm_list[@]} ]; then
-        echo -e "${RED}Invalid choice!${RESET}"
-        read -p "Press Enter to continue..."
-        return
-    fi
-
     selected="${vm_list[$((choice-1))]}"
-    proj=$(echo "$selected" | cut -d'|' -f1)
-    vmname=$(echo "$selected" | cut -d'|' -f2)
-    zone=$(echo "$selected" | cut -d'|' -f3)
+    acc=$(echo "$selected" | cut -d'|' -f1)
+    proj=$(echo "$selected" | cut -d'|' -f2)
+    vmname=$(echo "$selected" | cut -d'|' -f3)
     ip=$(echo "$selected" | cut -d'|' -f4)
 
-    echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj [Zone: $zone]...${RESET}"
+    echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj [Account: $acc]...${RESET}"
     ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
     read -p "Press Enter to continue..."
 }
@@ -295,17 +297,18 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)   |"
     echo -e "${YELLOW}${BOLD}| [3] 📁 Create Project (One/All Accounts, 2 Only)   |"
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VM (One/All Accounts)                |"
-    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects                |"
-    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                           |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (Box Style)                     |"
+    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects (All Accounts) |"
+    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects (All Accounts)            |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (All Accounts, Box Style)        |"
     echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM                               |"
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                               |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (ALL Projects)              |"
     echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                      |"
     echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                       |"
+    echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                      |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose an option [1-12]: " choice
+    read -p "Choose an option [1-13]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -313,13 +316,18 @@ while true; do
         3) auto_create_projects_menu ;;
         4) auto_create_vms_menu ;;
         5) show_all_vms ;;
-        6) gcloud projects list --format="table(projectId,name,createTime)" ; read -p "Press Enter..." ;;
+        6) for acc in $(gcloud auth list --format="value(account)"); do
+               gcloud config set account "$acc" > /dev/null 2>&1
+               echo -e "${CYAN}${BOLD}Account: $acc${RESET}"
+               gcloud projects list --format="table(projectId,name,createTime)"
+           done ; read -p "Press Enter..." ;;
         7) connect_vm ;;
         8) disconnect_vm ;;
         9) gcloud projects list --format="table(projectId,name)" ; read -p "Enter PID: " projid ; gcloud compute instances list --project=$projid --format="table(name,zone,status)" ; read -p "Enter VM: " vmname ; zone=$(gcloud compute instances list --project=$projid --filter="name=$vmname" --format="value(zone)") ; gcloud compute instances delete $vmname --project=$projid --zone=$zone --quiet ;;
-        10) for proj in $(gcloud projects list --format="value(projectId)"); do mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)"); for vm in "${vms[@]}"; do zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)"); gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet; done; done ;;
+        10) for acc in $(gcloud auth list --format="value(account)"); do gcloud config set account "$acc" > /dev/null 2>&1 ; for proj in $(gcloud projects list --format="value(projectId)"); do mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)"); for vm in "${vms[@]}"; do zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)"); gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet; done; done; done ;;
         11) show_billing_accounts ;;
         12) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
+        13) logout_google_account ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter..." ;;
     esac
 done
