@@ -409,15 +409,11 @@ show_all_vms() {
                     printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj" "$acc"
                     ((i++))
                 done <<< "$vms"
-                printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
             fi
         done
     done
-
-    # Remove the last line if there are no VMs
-    if [ $i -gt 1 ]; then
-        printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴───────────────────────────────┘${RESET}\n"
-    fi
+    
+    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴───────────────────────────────┘${RESET}\n"
     
     read -p "Press Enter to continue..."
 }
@@ -455,9 +451,6 @@ connect_vm() {
                     ((index++))
                 fi
             done
-            if [ -n "$vms" ]; then
-                printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
-            fi
         done
     done
 
