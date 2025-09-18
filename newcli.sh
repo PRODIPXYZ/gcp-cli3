@@ -289,14 +289,14 @@ add_extra_vms() {
     index=1
 
     printf "${YELLOW}┌─────┬──────────────────────────────┬───────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│%-30s│%-15s│${RESET}\n" "No" "PROJECT" "VM Count"
+    printf "${YELLOW}│%-5s│${CYAN}%-30s${YELLOW}│${MAGENTA}%-15s${YELLOW}│${RESET}\n" "No" "PROJECT" "VM Count"
     printf "${YELLOW}├─────┼──────────────────────────────┼───────────────┤${RESET}\n"
 
     for proj in $(gcloud projects list --format="value(projectId)"); do
         vms=$(gcloud compute instances list --project=$proj --format="value(name)" 2>/dev/null)
         if [ -n "$vms" ]; then
             vmcount=$(echo "$vms" | wc -l)
-            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-30s${YELLOW}│${RESET}%-15s${YELLOW}│${RESET}\n" "$index" "$proj" "$vmcount"
+            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${CYAN}%-30s${YELLOW}│${MAGENTA}%-15s${YELLOW}│${RESET}\n" "$index" "$proj" "$vmcount"
             vm_projects+=("$proj")
             ((index++))
         fi
@@ -347,13 +347,13 @@ create_2_vms_in_project() {
     index=1
 
     printf "${YELLOW}┌─────┬──────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│%-30s│${RESET}\n" "No" "PROJECT"
+    printf "${YELLOW}│%-5s│${CYAN}%-30s${YELLOW}│${RESET}\n" "No" "PROJECT"
     printf "${YELLOW}├─────┼──────────────────────────────┤${RESET}\n"
 
     for proj in $(gcloud projects list --format="value(projectId)"); do
         billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null)
         if [ "$billing_enabled" = "True" ]; then
-            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-30s${YELLOW}│${RESET}\n" "$index" "$proj"
+            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${CYAN}%-30s${YELLOW}│${RESET}\n" "$index" "$proj"
             projects+=("$proj")
             ((index++))
         fi
@@ -394,7 +394,7 @@ create_2_vms_in_project() {
 show_all_vms() {
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
     printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-31s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
     printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
 
     i=1
@@ -406,7 +406,7 @@ show_all_vms() {
             vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)" 2>/dev/null)
             if [ -n "$vms" ]; then
                 while read -r name ip; do
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj" "$acc"
+                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj" "$acc"
                     ((i++))
                 done <<< "$vms"
             fi
@@ -432,7 +432,7 @@ connect_vm() {
     index=1
 
     printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-31s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
     printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
@@ -445,7 +445,7 @@ connect_vm() {
                 name=$(echo $vm | awk '{print $1}')
                 ip=$(echo $vm | awk '{print $2}')
                 if [ -n "$name" ] && [ -n "$ip" ]; then
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$acc"
+                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$acc"
                     vm_list+=("$acc|$proj|$name|$ip")
                     ((index++))
                 fi
