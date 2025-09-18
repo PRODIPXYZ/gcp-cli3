@@ -474,30 +474,102 @@ connect_vm() {
     read -p "Press Enter to continue..."
 }
 
+# ---------- Check Gensyn Node Status ----------
+check_gensyn_node_status() {
+    echo -e "\n${CYAN}${BOLD}🔍 Checking Gensyn Node Status...${RESET}\n"
+    
+    # Check if Termius key exists before proceeding
+    if [ ! -f "$TERM_KEY_PATH" ]; then
+        echo -e "${RED}❌ Termius private key not found! Please connect a VM first to save the key.${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    vm_list=()
+    crashed_vms=()
+    index=1
+
+    printf "${YELLOW}┌─────┬────────────────┬───────────────────────────┬───────────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "NODE STATUS" "ACCOUNT"
+    printf "${YELLOW}├─────┼────────────────┼───────────────────────────┼───────────────────────────────┤${RESET}\n"
+
+    for acc in $(gcloud auth list --format="value(account)"); do
+        gcloud config set account "$acc" > /dev/null 2>&1
+        for proj in $(gcloud projects list --format="value(projectId)"); do
+            billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null)
+            if [ "$billing_enabled" != "True" ]; then continue; fi
+            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)" 2>/dev/null)
+            for vm in "${vms[@]}"; do
+                name=$(echo $vm | awk '{print $1}')
+                ip=$(echo $vm | awk '{print $2}')
+                
+                if [ -n "$name" ] && [ -n "$ip" ]; then
+                    # Run commands over SSH to check RAM and CPU usage
+                    ram_usage_mb=$(ssh -o StrictHostKeyChecking=no -i "$TERM_KEY_PATH" "$name@$ip" "free -m | grep Mem | awk '{print \$3}'" 2>/dev/null)
+                    cpu_usage_percent=$(ssh -o StrictHostKeyChecking=no -i "$TERM_KEY_PATH" "$name@$ip" "top -bn1 | grep 'Cpu(s)' | awk '{print \$2}' | cut -d'%' -f1" 2>/dev/null)
+                    
+                    ram_threshold=9216 # 9GB in MB
+                    cpu_threshold=40
+                    
+                    status="${RED}NODE CRASHED${RESET}"
+                    if [[ "$ram_usage_mb" -gt "$ram_threshold" ]] && [[ "$cpu_usage_percent" -gt "$cpu_threshold" ]]; then
+                        status="${GREEN}SMOOTH RUNNING${RESET}"
+                    else
+                        crashed_vms+=("$acc|$proj|$name|$ip")
+                    fi
+                    
+                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${status}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$status" "$acc"
+                    vm_list+=("$acc|$proj|$name|$ip")
+                    ((index++))
+                fi
+            done
+        done
+    done
+    printf "${YELLOW}└─────┴────────────────┴───────────────────────────┴───────────────────────────────┘${RESET}\n"
+
+    if [ ${#crashed_vms[@]} -gt 0 ]; then
+        echo -e "\n${RED}⚠️ Detected Crashed Nodes!${RESET}"
+        
+        printf "${YELLOW}┌─────┬────────────────┬───────────────────────────────┐${RESET}\n"
+        printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "ACCOUNT"
+        printf "${YELLOW}├─────┼────────────────┼───────────────────────────────┤${RESET}\n"
+
+        for i in "${!crashed_vms[@]}"; do
+            crashed_info="${crashed_vms[$i]}"
+            crashed_acc=$(echo "$crashed_info" | cut -d'|' -f1)
+            crashed_name=$(echo "$crashed_info" | cut -d'|' -f3)
+            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "$((i+1))" "$crashed_name" "$crashed_acc"
+            crashed_list_for_connect[$((i+1))]="${crashed_info}"
+        done
+        printf "${YELLOW}└─────┴────────────────┴───────────────────────────────┘${RESET}\n"
+
+        read -p "Enter VM number to connect and restart the node: " crash_choice
+        selected_crash_vm="${crashed_list_for_connect[$crash_choice]}"
+
+        if [ -n "$selected_crash_vm" ]; then
+            acc=$(echo "$selected_crash_vm" | cut -d'|' -f1)
+            proj=$(echo "$selected_crash_vm" | cut -d'|' -f2)
+            vmname=$(echo "$selected_crash_vm" | cut -d'|' -f3)
+            ip=$(echo "$selected_crash_vm" | cut -d'|' -f4)
+            
+            echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj [Account: $acc]...${RESET}"
+            ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
+        else
+            echo -e "${RED}Invalid choice!${RESET}"
+        fi
+    fi
+    read -p "Press Enter to continue..."
+}
+
 # ---------- Main Menu ----------
 while true; do
     clear
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${CYAN}${BOLD}|         GCP CLI MENU (ASISH AND PRODIP)           |"
-    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
-    echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)  |"
-    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects (Account Select)           |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VMs (Account Select)                |"
-    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs                               |"
-    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                          |"
-    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM                                 |"
-    echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM (Remove saved info)          |"
-    echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                              |"
-    echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)             |"
-    echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                     |"
-    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                      |"
-    echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                     |"
-    echo -e "${YELLOW}${BOLD}| [14] ➕ Add Extra 2 VMs in Existing Project        |"
-    echo -e "${YELLOW}${BOLD}| [15] ➕ Create 2 VMs in Any Project                |"
-    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    -e "${CYAN}${BOLD}| [16] 🟢 Check Gensyn Node Status                  |"
+    -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose an option [1-15]: " choice
+    read -p "Choose an option [1-16]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -519,6 +591,7 @@ while true; do
         13) logout_google_account ;;
         14) add_extra_vms ;;
         15) create_2_vms_in_project ;;
+        16) check_gensyn_node_status ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter..." ;;
     esac
 done
