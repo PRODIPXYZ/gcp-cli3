@@ -35,94 +35,140 @@ fresh_install() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Add Google Account ----------
+# ---------- Add/Login Google Account (Multi) ----------
 add_google_account() {
     echo -e "${YELLOW}${BOLD}Logging into a new Google Account...${RESET}"
-    read -p "Enter a name for this account (e.g., acc1, acc2): " accname
-    gcloud config configurations create "$accname" --no-activate >/dev/null 2>&1
-    gcloud config configurations activate "$accname"
-    gcloud auth login
-    echo -e "${GREEN}${BOLD}Google Account saved as config $accname!${RESET}"
+    email=$(gcloud auth login --brief --quiet 2>&1 | grep -oP "Logged in as \K\S+")
+    if [ -z "$email" ]; then
+        echo -e "${RED}❌ Failed to login!${RESET}"
+    else
+        safe_name=$(echo "$email" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+        gcloud config configurations create "$safe_name" --no-activate &>/dev/null
+        gcloud config configurations activate "$safe_name"
+        gcloud auth login "$email"
+        echo -e "${GREEN}Google Account $email saved as config $safe_name!${RESET}"
+    fi
     read -p "Press Enter to continue..."
 }
 
-# ---------- Remove Google Account ----------
+# ---------- Remove/Logout Google Account ----------
 remove_google_account() {
-    echo -e "${YELLOW}${BOLD}Available Configurations:${RESET}"
-    gcloud config configurations list
-    read -p "Enter configuration name to remove: " accname
-    gcloud config configurations delete "$accname" --quiet
-    echo -e "${GREEN}${BOLD}Configuration $accname removed.${RESET}"
+    echo -e "${YELLOW}${BOLD}Available Accounts:${RESET}"
+    gcloud auth list
+    read -p "Enter email to remove: " rem
+    gcloud auth revoke "$rem"
+    echo -e "${GREEN}Account $rem removed successfully!${RESET}"
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto Project + Billing (2 Projects) ----------
+# ---------- Auto Project + Billing (2 New Per Account) ----------
 auto_create_projects() {
-    echo -e "${YELLOW}${BOLD}Creating 2 Projects + Linking Billing...${RESET}"
+    echo -e "${YELLOW}${BOLD}Creating 2 Projects + Linking Billing (per account)...${RESET}"
 
-    billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
-    if [ -z "$billing_id" ]; then
-        billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
-    fi
-    if [ -z "$billing_id" ]; then
-        read -p "Enter Billing Account ID manually: " billing_id
-    fi
-    if [ -z "$billing_id" ]; then
-        echo -e "${RED}${BOLD}❌ No billing ID provided.${RESET}"
-        read -p "Press Enter..."
-        return
-    fi
+    for conf in $(gcloud config configurations list --format="value(name)"); do
+        gcloud config configurations activate "$conf" &>/dev/null
+        echo -e "\n${CYAN}${BOLD}➡️ Using Account Config: $conf${RESET}"
 
-    for i in 1 2; do
-        projid="auto-proj-$RANDOM"
-        projname="auto-proj-$i"
-        echo -e "${CYAN}${BOLD}➡️ Creating Project: $projid${RESET}"
+        billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+        [ -z "$billing_id" ] && billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
 
-        if ! gcloud projects create "$projid" --name="$projname" --quiet; then
-            echo -e "${RED}❌ Failed to create project $projid${RESET}"
+        if [ -z "$billing_id" ]; then
+            echo -e "${RED}❌ No billing account found for $conf! Skipping...${RESET}"
             continue
         fi
 
-        gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
-        gcloud services enable compute.googleapis.com --project="$projid" --quiet
+        for i in 1 2; do
+            projid="auto-proj-$RANDOM"
+            projname="auto-proj-$i"
+            echo -e "${CYAN}Creating Project: $projid ($projname)${RESET}"
 
-        echo -e "${GREEN}${BOLD}✅ Project $projid ready with billing & API enabled.${RESET}"
+            if gcloud projects create "$projid" --name="$projname" --quiet; then
+                gcloud beta billing projects link "$projid" --billing-account "$billing_id" --quiet
+                gcloud services enable compute.googleapis.com --project="$projid" --quiet
+                echo -e "${GREEN}✅ Project $projid ready with billing & API enabled.${RESET}"
+            else
+                echo -e "${RED}❌ Failed to create project $projid${RESET}"
+            fi
+        done
     done
-    read -p "Press Enter..."
+    read -p "Press Enter to continue..."
+}
+
+# ---------- Auto VM Create (6 per Account) ----------
+auto_create_vms() {
+    echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
+    read pubkey
+
+    zone="asia-southeast1-b"
+    mtype="n2d-custom-4-25600"
+    disksize="60"
+
+    echo -e "${CYAN}${BOLD}Enter 6 VM Names (per account, project-wise 2 each)...${RESET}"
+    vmnames=()
+    for i in {1..6}; do
+        read -p "Enter VM Name #$i: " name
+        vmnames+=("$name")
+    done
+
+    for conf in $(gcloud config configurations list --format="value(name)"); do
+        gcloud config configurations activate "$conf" &>/dev/null
+        echo -e "\n${CYAN}${BOLD}➡️ Creating VMs for Account Config: $conf${RESET}"
+
+        billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+        [ -z "$billing_id" ] && billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
+        projects=$(gcloud beta billing projects list --billing-account="$billing_id" --format="value(projectId)" | head -n 3)
+
+        count=0
+        for proj in $projects; do
+            gcloud config set project $proj &>/dev/null
+            gcloud services enable compute.googleapis.com --project="$proj" --quiet
+            for j in {1..2}; do
+                vmname="${vmnames[$count]}"
+                echo -e "${GREEN}Creating VM $vmname in $proj...${RESET}"
+                gcloud compute instances create "$vmname" \
+                    --zone=$zone \
+                    --machine-type=$mtype \
+                    --image-family=ubuntu-2404-lts-amd64 \
+                    --image-project=ubuntu-os-cloud \
+                    --boot-disk-size=${disksize}GB \
+                    --boot-disk-type=pd-balanced \
+                    --metadata ssh-keys="${vmname}:${pubkey}" \
+                    --tags=http-server,https-server \
+                    --quiet
+                ((count++))
+            done
+        done
+    done
+    echo -e "${GREEN}${BOLD}✅ All VMs Created Successfully Across Accounts!${RESET}"
+    read -p "Press Enter to continue..."
 }
 
 # ---------- Show All VMs (Box Style) ----------
 show_all_vms() {
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
-    echo -e "${YELLOW}=============================================${RESET}"
-    echo -e "   🌐 ${BOLD}Listing ALL VMs (All Accounts)${RESET}"
-    echo -e "${YELLOW}=============================================${RESET}\n"
-
     printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬──────────────┐${RESET}\n"
     printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-14s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ZONE"
     printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼──────────────┤${RESET}\n"
 
-    index=1
-    for config in $(gcloud config configurations list --format="value(NAME)" 2>/dev/null); do
-        gcloud config configurations activate "$config" >/dev/null 2>&1
-        for proj in $(gcloud projects list --format="value(projectId)" 2>/dev/null); do
-            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,zone,EXTERNAL_IP)" 2>/dev/null)
+    i=1
+    for conf in $(gcloud config configurations list --format="value(name)"); do
+        gcloud config configurations activate "$conf" &>/dev/null
+        for proj in $(gcloud projects list --format="value(projectId)"); do
+            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP,zone)")
             for vm in "${vms[@]}"; do
                 name=$(echo $vm | awk '{print $1}')
-                zone=$(echo $vm | awk '{print $2}')
-                ip=$(echo $vm | awk '{print $3}')
-                if [ -n "$name" ] && [ -n "$ip" ]; then
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-14s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$zone"
-                    ((index++))
-                fi
+                ip=$(echo $vm | awk '{print $2}')
+                zone=$(echo $vm | awk '{print $3}')
+                [ -n "$name" ] && [ -n "$ip" ] && printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-14s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj" "$zone"
+                ((i++))
             done
         done
     done
     printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴──────────────┘${RESET}\n"
-    read -p "Press Enter..."
+    read -p "Press Enter to continue..."
 }
 
-# ---------- Connect VM (Box Style + Serial No) ----------
+# ---------- Connect VM ----------
 connect_vm() {
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${YELLOW}Enter path to Termius private key:${RESET}"
@@ -132,10 +178,6 @@ connect_vm() {
     fi
 
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
-    echo -e "${YELLOW}=============================================${RESET}"
-    echo -e "   🔗 ${BOLD}Connect to VM (All Accounts)${RESET}"
-    echo -e "${YELLOW}=============================================${RESET}\n"
-
     vm_list=()
     index=1
 
@@ -143,41 +185,57 @@ connect_vm() {
     printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│%-14s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ZONE"
     printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼──────────────┤${RESET}\n"
 
-    for config in $(gcloud config configurations list --format="value(NAME)" 2>/dev/null); do
-        gcloud config configurations activate "$config" >/dev/null 2>&1
-        for proj in $(gcloud projects list --format="value(projectId)" 2>/dev/null); do
-            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,zone,EXTERNAL_IP)" 2>/dev/null)
+    for conf in $(gcloud config configurations list --format="value(name)"); do
+        gcloud config configurations activate "$conf" &>/dev/null
+        for proj in $(gcloud projects list --format="value(projectId)"); do
+            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP,zone)")
             for vm in "${vms[@]}"; do
                 name=$(echo $vm | awk '{print $1}')
-                zone=$(echo $vm | awk '{print $2}')
-                ip=$(echo $vm | awk '{print $3}')
+                ip=$(echo $vm | awk '{print $2}')
+                zone=$(echo $vm | awk '{print $3}')
                 if [ -n "$name" ] && [ -n "$ip" ]; then
                     printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-16s${YELLOW}│${RESET}%-22s${YELLOW}│${RESET}%-31s${YELLOW}│${RESET}%-14s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$zone"
-                    vm_list+=("$proj|$name|$zone|$ip|$config")
+                    vm_list+=("$proj|$name|$zone|$ip")
                     ((index++))
                 fi
             done
         done
     done
+
     printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┴──────────────┘${RESET}\n"
-
-    if [ ${#vm_list[@]} -eq 0 ]; then
-        echo -e "${RED}❌ No VMs found.${RESET}"
-        read -p "Press Enter..."
-        return
-    fi
-
     read -p "Enter VM number to connect: " choice
     selected="${vm_list[$((choice-1))]}"
     proj=$(echo "$selected" | cut -d'|' -f1)
     vmname=$(echo "$selected" | cut -d'|' -f2)
     zone=$(echo "$selected" | cut -d'|' -f3)
     ip=$(echo "$selected" | cut -d'|' -f4)
-    conf=$(echo "$selected" | cut -d'|' -f5)
 
-    gcloud config configurations activate "$conf" >/dev/null 2>&1
-    echo -e "${GREEN}${BOLD}Connecting to $vmname@$ip (Project: $proj, Zone: $zone)...${RESET}"
     ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
+    read -p "Press Enter to continue..."
+}
+
+# ---------- Delete One VM ----------
+delete_one_vm() {
+    gcloud projects list --format="table(projectId,name)"
+    read -p "Enter Project ID: " projid
+    gcloud compute instances list --project=$projid --format="table(name,zone,status)"
+    read -p "Enter VM Name to delete: " vmname
+    zone=$(gcloud compute instances list --project=$projid --filter="name=$vmname" --format="value(zone)")
+    gcloud compute instances delete $vmname --project=$projid --zone=$zone --quiet
+    echo -e "${GREEN}VM $vmname deleted successfully.${RESET}"
+    read -p "Press Enter..."
+}
+
+# ---------- Delete All VMs ----------
+delete_all_vms() {
+    for proj in $(gcloud projects list --format="value(projectId)"); do
+        mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)")
+        for vm in "${vms[@]}"; do
+            zone=$(gcloud compute instances list --project=$proj --filter="name=$vm" --format="value(zone)")
+            gcloud compute instances delete $vm --project=$proj --zone=$zone --quiet
+            echo -e "${GREEN}Deleted $vm from $proj${RESET}"
+        done
+    done
     read -p "Press Enter..."
 }
 
@@ -190,22 +248,28 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Login Google Account (Multi)          |"
     echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create 2 Projects + Auto Billing       |"
-    echo -e "${YELLOW}${BOLD}| [4] 🌍 Show All VMs (All Accounts)                 |"
-    echo -e "${YELLOW}${BOLD}| [5] 🔗 Connect VM (All Accounts)                   |"
-    echo -e "${YELLOW}${BOLD}| [6] ❌ Remove / Logout Google Account              |"
-    echo -e "${YELLOW}${BOLD}| [7] 🚪 Exit                                        |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create VMs (6 per Account)             |"
+    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs (All Accounts)                 |"
+    echo -e "${YELLOW}${BOLD}| [6] 🔗 Connect VM (All Accounts)                   |"
+    echo -e "${YELLOW}${BOLD}| [7] 🗑️ Delete ONE VM                               |"
+    echo -e "${YELLOW}${BOLD}| [8] 💣 Delete ALL VMs                              |"
+    echo -e "${YELLOW}${BOLD}| [9] ❌ Remove / Logout Google Account              |"
+    echo -e "${YELLOW}${BOLD}| [10] 🚪 Exit                                       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose [1-7]: " choice
+    read -p "Choose [1-10]: " choice
 
     case $choice in
         1) fresh_install ;;
         2) add_google_account ;;
         3) auto_create_projects ;;
-        4) show_all_vms ;;
-        5) connect_vm ;;
-        6) remove_google_account ;;
-        7) exit 0 ;;
+        4) auto_create_vms ;;
+        5) show_all_vms ;;
+        6) connect_vm ;;
+        7) delete_one_vm ;;
+        8) delete_all_vms ;;
+        9) remove_google_account ;;
+        10) echo -e "${RED}Exiting...${RESET}" ; exit 0 ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter..." ;;
     esac
 done
