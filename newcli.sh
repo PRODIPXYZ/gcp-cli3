@@ -566,8 +566,24 @@ while true; do
     clear
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${CYAN}${BOLD}|         GCP CLI MENU (ASISH AND PRODIP)           |"
-    -e "${CYAN}${BOLD}| [16] 🟢 Check Gensyn Node Status                  |"
-    -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
+    echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)  |"
+    echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects (Account Select)           |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VMs (Account Select)                |"
+    echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs                               |"
+    echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects                          |"
+    echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM                                 |"
+    echo -e "${YELLOW}${BOLD}| [8] ❌ Disconnect VM (Remove saved info)          |"
+    echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                              |"
+    echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)             |"
+    echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                     |"
+    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                      |"
+    echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                     |"
+    echo -e "${YELLOW}${BOLD}| [14] ➕ Add Extra 2 VMs in Existing Project        |"
+    echo -e "${YELLOW}${BOLD}| [15] ➕ Create 2 VMs in Any Project                |"
+    echo -e "${YELLOW}${BOLD}| [16] 🟢 Check Gensyn Node Status                  |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
     read -p "Choose an option [1-16]: " choice
 
