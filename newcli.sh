@@ -147,7 +147,7 @@ auto_create_vms_menu() {
     esac
 }
 
-# ---------- Auto VM Create (6 total per account) ----------
+# ---------- Auto VM Create (Default + 2 Billing Linked = 6 VMs) ----------
 auto_create_vms() {
     echo -e "${YELLOW}Enter your SSH Public Key (only key part):${RESET}"
     read pubkey
@@ -156,11 +156,15 @@ auto_create_vms() {
     mtype="n2d-custom-4-25600"
     disksize="60"
 
-    projects=$(gcloud projects list --format="value(projectId)" | head -n 3)
-    if [ -z "$projects" ]; then
-        echo -e "${RED}No projects found!${RESET}"
-        return
-    fi
+    # Default project (usually billing linked)
+    default_project=$(gcloud projects list --format="value(projectId)" | head -n1)
+
+    # First 2 billing linked projects
+    billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+    billing_projects=$(gcloud beta billing projects list --billing-account=$billing_id --format="value(projectId)" | head -n2)
+
+    projects="$default_project
+$billing_projects"
 
     echo -e "${CYAN}${BOLD}Enter 6 VM Names:${RESET}"
     vmnames=()
@@ -186,6 +190,7 @@ auto_create_vms() {
             ((count++))
         done
     done
+
     echo -e "${GREEN}✔ All VMs Created Successfully!${RESET}"
     read -p "Press Enter to continue..."
 }
@@ -296,7 +301,7 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)   |"
     echo -e "${YELLOW}${BOLD}| [3] 📁 Create Project (One/All Accounts, 2 Only)   |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VM (One/All Accounts)                |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VM (One/All Accounts, 6 Per Account) |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs Across Projects (All Accounts) |"
     echo -e "${YELLOW}${BOLD}| [6] 📜 Show All Projects (All Accounts)            |"
     echo -e "${YELLOW}${BOLD}| [7] 🔗 Connect VM (All Accounts, Box Style)        |"
