@@ -94,8 +94,29 @@ auto_create_projects() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Auto VM Create (6 per Account) ----------
+# ---------- Auto VM Create Menu ----------
 auto_create_vms() {
+    clear
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${CYAN}${BOLD}|           AUTO CREATE VM MENU (PRODIP)            |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
+    echo -e "${YELLOW}${BOLD}| [1] Create VMs for ONE Account                    |"
+    echo -e "${YELLOW}${BOLD}| [2] Create VMs for ALL Accounts                   |"
+    echo -e "${YELLOW}${BOLD}| [3] Back to Main Menu                             |"
+    echo -e "${CYAN}${BOLD}+---------------------------------------------------+${RESET}"
+    echo
+    read -p "Choose [1-3]: " subchoice
+
+    case $subchoice in
+        1) auto_create_vms_one ;;
+        2) auto_create_vms_all ;;
+        3) return ;;
+        *) echo -e "${RED}Invalid choice!${RESET}" ; sleep 2 ;;
+    esac
+}
+
+# ---------- Common VM Create Logic ----------
+vm_create_logic() {
     echo -e "${YELLOW}${BOLD}Enter your SSH Public Key (without username:, only key part):${RESET}"
     read pubkey
 
@@ -103,41 +124,70 @@ auto_create_vms() {
     mtype="n2d-custom-4-25600"
     disksize="60"
 
-    echo -e "${CYAN}${BOLD}Enter 6 VM Names (per account, project-wise 2 each)...${RESET}"
+    echo -e "${CYAN}${BOLD}Enter 6 VM Names (project-wise 2 each)...${RESET}"
     vmnames=()
     for i in {1..6}; do
         read -p "Enter VM Name #$i: " name
         vmnames+=("$name")
     done
 
+    billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+    projects=$(gcloud beta billing projects list --billing-account="$billing_id" --format="value(projectId)" | head -n 3)
+
+    count=0
+    for proj in $projects; do
+        gcloud config set project $proj &>/dev/null
+        gcloud services enable compute.googleapis.com --project="$proj" --quiet
+        for j in {1..2}; do
+            vmname="${vmnames[$count]}"
+            echo -e "${GREEN}Creating VM $vmname in $proj...${RESET}"
+            gcloud compute instances create "$vmname" \
+                --zone=$zone \
+                --machine-type=$mtype \
+                --image-family=ubuntu-2404-lts-amd64 \
+                --image-project=ubuntu-os-cloud \
+                --boot-disk-size=${disksize}GB \
+                --boot-disk-type=pd-balanced \
+                --metadata=ssh-keys="ubuntu:${pubkey}" \
+                --tags=http-server,https-server \
+                --quiet
+            ((count++))
+        done
+    done
+}
+
+# ---------- One Account ----------
+auto_create_vms_one() {
+    echo -e "${CYAN}${BOLD}Available Accounts:${RESET}\n"
+    printf "${YELLOW}┌─────┬───────────────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│${BLUE}%-35s${YELLOW}│${RESET}\n" "No" "CONFIG NAME"
+    printf "${YELLOW}├─────┼───────────────────────────────────┤${RESET}\n"
+
+    acc_list=()
+    index=1
+    for conf in $(gcloud config configurations list --format="value(name)"); do
+        printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-35s${YELLOW}│${RESET}\n" "$index" "$conf"
+        acc_list+=("$conf")
+        ((index++))
+    done
+    printf "${YELLOW}└─────┴───────────────────────────────────┘${RESET}\n"
+
+    read -p "Enter account number: " acc_no
+    conf="${acc_list[$((acc_no-1))]}"
+    gcloud config configurations activate "$conf" &>/dev/null
+
+    echo -e "${GREEN}➡️ Selected Account Config: $conf${RESET}"
+    vm_create_logic
+    echo -e "${GREEN}${BOLD}✅ VMs Created for ONE Account!${RESET}"
+    read -p "Press Enter to continue..."
+}
+
+# ---------- All Accounts ----------
+auto_create_vms_all() {
     for conf in $(gcloud config configurations list --format="value(name)"); do
         gcloud config configurations activate "$conf" &>/dev/null
         echo -e "\n${CYAN}${BOLD}➡️ Creating VMs for Account Config: $conf${RESET}"
-
-        billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
-        [ -z "$billing_id" ] && billing_id=$(gcloud beta billing accounts list --format="value(accountId)" | head -n1)
-        projects=$(gcloud beta billing projects list --billing-account="$billing_id" --format="value(projectId)" | head -n 3)
-
-        count=0
-        for proj in $projects; do
-            gcloud config set project $proj &>/dev/null
-            gcloud services enable compute.googleapis.com --project="$proj" --quiet
-            for j in {1..2}; do
-                vmname="${vmnames[$count]}"
-                echo -e "${GREEN}Creating VM $vmname in $proj...${RESET}"
-                gcloud compute instances create "$vmname" \
-                    --zone=$zone \
-                    --machine-type=$mtype \
-                    --image-family=ubuntu-2404-lts-amd64 \
-                    --image-project=ubuntu-os-cloud \
-                    --boot-disk-size=${disksize}GB \
-                    --boot-disk-type=pd-balanced \
-                    --metadata ssh-keys="${vmname}:${pubkey}" \
-                    --tags=http-server,https-server \
-                    --quiet
-                ((count++))
-            done
-        done
+        vm_create_logic
     done
     echo -e "${GREEN}${BOLD}✅ All VMs Created Successfully Across Accounts!${RESET}"
     read -p "Press Enter to continue..."
@@ -210,7 +260,7 @@ connect_vm() {
     zone=$(echo "$selected" | cut -d'|' -f3)
     ip=$(echo "$selected" | cut -d'|' -f4)
 
-    ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
+    ssh -i "$TERM_KEY_PATH" "ubuntu@$ip"
     read -p "Press Enter to continue..."
 }
 
@@ -228,6 +278,8 @@ delete_one_vm() {
 
 # ---------- Delete All VMs ----------
 delete_all_vms() {
+    read -p "Are you sure to delete ALL VMs? (y/n): " ans
+    [[ "$ans" != "y" ]] && return
     for proj in $(gcloud projects list --format="value(projectId)"); do
         mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name)")
         for vm in "${vms[@]}"; do
@@ -248,7 +300,7 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Login Google Account (Multi)          |"
     echo -e "${YELLOW}${BOLD}| [3] 📁 Auto Create 2 Projects + Auto Billing       |"
-    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create VMs (6 per Account)             |"
+    echo -e "${YELLOW}${BOLD}| [4] 🚀 Auto Create VMs Menu                        |"
     echo -e "${YELLOW}${BOLD}| [5] 🌍 Show All VMs (All Accounts)                 |"
     echo -e "${YELLOW}${BOLD}| [6] 🔗 Connect VM (All Accounts)                   |"
     echo -e "${YELLOW}${BOLD}| [7] 🗑️ Delete ONE VM                               |"
