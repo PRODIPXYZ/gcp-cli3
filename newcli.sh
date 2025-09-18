@@ -488,9 +488,9 @@ check_gensyn_node_status() {
     crashed_vms=()
     index=1
 
-    printf "${YELLOW}┌─────┬────────────────┬───────────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "NODE STATUS (RAM/CPU)" "ACCOUNT"
-    printf "${YELLOW}├─────┼────────────────┼───────────────────────────┼───────────────────────────────┤${RESET}\n"
+    printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-22s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "NODE STATUS (RAM/CPU)" "ACCOUNT"
+    printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
         gcloud config set account "$acc" > /dev/null 2>&1
@@ -511,25 +511,27 @@ check_gensyn_node_status() {
                     
                     status_str=""
                     if [[ -z "$ram_usage_mb" ]] || [[ -z "$cpu_usage_percent" ]]; then
-                        status_str="${RED}${BOLD}🔴 OFFLINE${RESET}"
+                        status_str="${RED}🔴 OFFLINE${RESET}"
                         crashed_vms+=("$acc|$proj|$name|$ip")
                     else
+                        ram_gb=$(awk "BEGIN {printf \"%.1f\", $ram_usage_mb/1024}")
+                        
                         if (( $(echo "$ram_usage_mb > $ram_threshold" | bc -l) )) && (( $(echo "$cpu_usage_percent > $cpu_threshold" | bc -l) )); then
-                            status_str="${GREEN}${BOLD}🟢 SMOOTH RUNNING${RESET} ${YELLOW}(RAM: ${ram_usage_mb}MB, CPU: ${cpu_usage_percent}%)"
+                            status_str="${GREEN}🟢 RUNNING${RESET} ${YELLOW}(${ram_gb}G/${cpu_usage_percent}%)"
                         else
-                            status_str="${RED}${BOLD}🔴 NODE CRASHED${RESET} ${YELLOW}(RAM: ${ram_usage_mb}MB, CPU: ${cpu_usage_percent}%)"
+                            status_str="${RED}🔴 CRASHED${RESET} ${YELLOW}(${ram_gb}G/${cpu_usage_percent}%)"
                             crashed_vms+=("$acc|$proj|$name|$ip")
                         fi
                     fi
                     
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${status_str}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$status_str" "$acc"
+                    printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${status_str}%-22s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$status_str" "$acc"
                     vm_list+=("$acc|$proj|$name|$ip")
                     ((index++))
                 fi
             done
         done
     done
-    printf "${YELLOW}└─────┴────────────────┴───────────────────────────┴───────────────────────────────┘${RESET}\n"
+    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┘${RESET}\n"
 
     if [ ${#crashed_vms[@]} -gt 0 ]; then
         echo -e "\n${RED}⚠️ Detected Crashed Nodes!${RESET}"
@@ -542,7 +544,7 @@ check_gensyn_node_status() {
             crashed_info="${crashed_vms[$i]}"
             crashed_acc=$(echo "$crashed_info" | cut -d'|' -f1)
             crashed_name=$(echo "$crashed_info" | cut -d'|' -f3)
-            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "$((i+1))" "$crashed_name" "$crashed_acc"
+            printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "$((i+1))" "$crashed_name" "$crashed_acc"
             crashed_list_for_connect[$((i+1))]="${crashed_info}"
         done
         printf "${YELLOW}└─────┴────────────────┴───────────────────────────────┘${RESET}\n"
