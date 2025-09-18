@@ -222,29 +222,56 @@ add_extra_vms() {
     read -p "Press Enter to continue..."
 }
 
-# ---------- Create 2 VMs in Any Project ----------
+# ---------- Create 2 VMs in Any Project (Updated Smart Logic) ----------
 create_2_vms_in_project() {
     echo -e "\n${CYAN}${BOLD}➕ Create 2 VMs in Any Project${RESET}\n"
 
     projects=()
     index=1
 
-    printf "${YELLOW}┌─────┬──────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│%-30s│${RESET}\n" "No" "PROJECT"
-    printf "${YELLOW}├─────┼──────────────────────────────┤${RESET}\n"
+    printf "${YELLOW}┌─────┬──────────────────────────────┬───────────────┬───────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│%-30s│%-15s│%-23s│${RESET}\n" "No" "PROJECT" "VM Count" "Billing Status"
+    printf "${YELLOW}├─────┼──────────────────────────────┼───────────────┼───────────────────────┤${RESET}\n"
 
     for proj in $(gcloud projects list --format="value(projectId)"); do
         billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null)
         if [ "$billing_enabled" = "True" ]; then
-            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-30s${YELLOW}│${RESET}\n" "$index" "$proj"
-            projects+=("$proj")
-            ((index++))
+            billing_status="Enabled"
+        else
+            billing_status="Disabled"
         fi
+
+        vms=$(gcloud compute instances list --project=$proj --format="value(name)" 2>/dev/null)
+        if [ -n "$vms" ]; then
+            vmcount=$(echo "$vms" | wc -l)
+        else
+            vmcount=0
+        fi
+
+        printf "${YELLOW}│${RESET}%-5s${YELLOW}│${RESET}%-30s${YELLOW}│${RESET}%-15s${YELLOW}│${RESET}%-23s${YELLOW}│${RESET}\n" "$index" "$proj" "$vmcount" "$billing_status"
+        projects+=("$proj|$billing_status")
+        ((index++))
     done
 
-    printf "${YELLOW}└─────┴──────────────────────────────┘${RESET}\n"
+    if [ ${#projects[@]} -eq 0 ]; then
+        echo -e "${RED}❌ No projects found.${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    printf "${YELLOW}└─────┴──────────────────────────────┴───────────────┴───────────────────────┘${RESET}\n"
     read -p "Choose project number: " choice
-    proj="${projects[$((choice-1))]}"
+    selected="${projects[$((choice-1))]}"
+
+    proj=$(echo "$selected" | cut -d'|' -f1)
+    billing_status=$(echo "$selected" | cut -d'|' -f2)
+
+    if [ "$billing_status" = "Disabled" ]; then
+        billing_id=$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" | head -n1)
+        echo -e "${CYAN}Linking billing for $proj...${RESET}"
+        gcloud beta billing projects link "$proj" --billing-account "$billing_id" --quiet
+        gcloud services enable compute.googleapis.com --project="$proj" --quiet
+    fi
 
     echo -e "${CYAN}${BOLD}Enter 2 VM Names:${RESET}"
     vmnames=()
