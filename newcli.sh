@@ -470,7 +470,7 @@ connect_vm() {
     ip=$(echo "$selected" | cut -d'|' -f4)
 
     echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj [Account: $acc]...${RESET}"
-    ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$vmname@$ip"
     read -p "Press Enter to continue..."
 }
 
@@ -478,7 +478,6 @@ connect_vm() {
 check_gensyn_node_status() {
     echo -e "\n${CYAN}${BOLD}🔍 Checking Gensyn Node Status...${RESET}\n"
     
-    # Check if Termius key exists before proceeding
     if [ ! -f "$TERM_KEY_PATH" ]; then
         echo -e "${RED}❌ Termius private key not found! Please connect a VM first to save the key.${RESET}"
         read -p "Press Enter to continue..."
@@ -490,7 +489,7 @@ check_gensyn_node_status() {
     index=1
 
     printf "${YELLOW}┌─────┬────────────────┬───────────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "NODE STATUS" "ACCOUNT"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "NODE STATUS (RAM/CPU)" "ACCOUNT"
     printf "${YELLOW}├─────┼────────────────┼───────────────────────────┼───────────────────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
@@ -504,21 +503,26 @@ check_gensyn_node_status() {
                 ip=$(echo $vm | awk '{print $2}')
                 
                 if [ -n "$name" ] && [ -n "$ip" ]; then
-                    # Run commands over SSH to check RAM and CPU usage
-                    ram_usage_mb=$(ssh -o StrictHostKeyChecking=no -i "$TERM_KEY_PATH" "$name@$ip" "free -m | grep Mem | awk '{print \$3}'" 2>/dev/null)
-                    cpu_usage_percent=$(ssh -o StrictHostKeyChecking=no -i "$TERM_KEY_PATH" "$name@$ip" "top -bn1 | grep 'Cpu(s)' | awk '{print \$2}' | cut -d'%' -f1" 2>/dev/null)
+                    ram_usage_mb=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "free -m | grep Mem | awk '{print \$3}'" 2>/dev/null)
+                    cpu_usage_percent=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "top -bn1 | grep 'Cpu(s)' | awk '{print \$2}' | cut -d'%' -f1" 2>/dev/null)
                     
-                    ram_threshold=9216 # 9GB in MB
-                    cpu_threshold=40
+                    ram_threshold=5120 # 5GB in MB
+                    cpu_threshold=10
                     
-                    status="${RED}NODE CRASHED${RESET}"
-                    if [[ "$ram_usage_mb" -gt "$ram_threshold" ]] && [[ "$cpu_usage_percent" -gt "$cpu_threshold" ]]; then
-                        status="${GREEN}SMOOTH RUNNING${RESET}"
-                    else
+                    status_str=""
+                    if [[ -z "$ram_usage_mb" ]] || [[ -z "$cpu_usage_percent" ]]; then
+                        status_str="${RED}${BOLD}🔴 OFFLINE${RESET}"
                         crashed_vms+=("$acc|$proj|$name|$ip")
+                    else
+                        if (( $(echo "$ram_usage_mb > $ram_threshold" | bc -l) )) && (( $(echo "$cpu_usage_percent > $cpu_threshold" | bc -l) )); then
+                            status_str="${GREEN}${BOLD}🟢 SMOOTH RUNNING${RESET} ${YELLOW}(RAM: ${ram_usage_mb}MB, CPU: ${cpu_usage_percent}%)"
+                        else
+                            status_str="${RED}${BOLD}🔴 NODE CRASHED${RESET} ${YELLOW}(RAM: ${ram_usage_mb}MB, CPU: ${cpu_usage_percent}%)"
+                            crashed_vms+=("$acc|$proj|$name|$ip")
+                        fi
                     fi
                     
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${status}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$status" "$acc"
+                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${status_str}%-27s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$status_str" "$acc"
                     vm_list+=("$acc|$proj|$name|$ip")
                     ((index++))
                 fi
@@ -553,7 +557,7 @@ check_gensyn_node_status() {
             ip=$(echo "$selected_crash_vm" | cut -d'|' -f4)
             
             echo -e "${GREEN}${BOLD}Connecting to $vmname ($ip) in project $proj [Account: $acc]...${RESET}"
-            ssh -i "$TERM_KEY_PATH" "$vmname@$ip"
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$vmname@$ip"
         else
             echo -e "${RED}Invalid choice!${RESET}"
         fi
