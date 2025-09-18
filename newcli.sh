@@ -296,7 +296,7 @@ add_extra_vms() {
         vms=$(gcloud compute instances list --project=$proj --format="value(name)" 2>/dev/null)
         if [ -n "$vms" ]; then
             vmcount=$(echo "$vms" | wc -l)
-            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${CYAN}%-30s${YELLOW}│${MAGENTA}%-15s${YELLOW}│${RESET}\n" "$index" "$proj" "$vmcount"
+            printf "${YELLOW}│${RESET}%-5s│${CYAN}%-30s│${MAGENTA}%-15s│${RESET}\n" "$index" "$proj" "$vmcount"
             vm_projects+=("$proj")
             ((index++))
         fi
@@ -347,13 +347,13 @@ create_2_vms_in_project() {
     index=1
 
     printf "${YELLOW}┌─────┬──────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${CYAN}%-30s${YELLOW}│${RESET}\n" "No" "PROJECT"
+    printf "${YELLOW}│%-5s│${CYAN}%-30s│${RESET}\n" "No" "PROJECT"
     printf "${YELLOW}├─────┼──────────────────────────────┤${RESET}\n"
 
     for proj in $(gcloud projects list --format="value(projectId)"); do
         billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null)
         if [ "$billing_enabled" = "True" ]; then
-            printf "${YELLOW}│${RESET}%-5s${YELLOW}│${CYAN}%-30s${YELLOW}│${RESET}\n" "$index" "$proj"
+            printf "${YELLOW}│${RESET}%-5s│${CYAN}%-30s│${RESET}\n" "$index" "$proj"
             projects+=("$proj")
             ((index++))
         fi
@@ -394,7 +394,7 @@ create_2_vms_in_project() {
 show_all_vms() {
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
     printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s│${GREEN}%-22s│${MAGENTA}%-31s│${CYAN}%-31s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
     printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
 
     i=1
@@ -406,7 +406,7 @@ show_all_vms() {
             vms=$(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)" 2>/dev/null)
             if [ -n "$vms" ]; then
                 while read -r name ip; do
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$i" "$name" "$ip" "$proj" "$acc"
+                    printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${GREEN}%-22s│${MAGENTA}%-31s│${CYAN}%-31s│${RESET}\n" "$i" "$name" "$ip" "$proj" "$acc"
                     ((i++))
                 done <<< "$vms"
             fi
@@ -433,7 +433,7 @@ connect_vm() {
     index=1
 
     printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
+    printf "${YELLOW}│%-5s│${BLUE}%-16s│${GREEN}%-22s│${MAGENTA}%-31s│${CYAN}%-31s│${RESET}\n" "No" "USERNAME" "IP" "PROJECT" "ACCOUNT"
     printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┼───────────────────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
@@ -446,7 +446,7 @@ connect_vm() {
                 name=$(echo $vm | awk '{print $1}')
                 ip=$(echo $vm | awk '{print $2}')
                 if [ -n "$name" ] && [ -n "$ip" ]; then
-                    printf "${YELLOW}│${RESET}%-5s${YELLOW}│${BLUE}%-16s${YELLOW}│${GREEN}%-22s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$ip" "$proj" "$acc"
+                    printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${GREEN}%-22s│${MAGENTA}%-31s│${CYAN}%-31s│${RESET}\n" "$index" "$name" "$ip" "$proj" "$acc"
                     vm_list+=("$acc|$proj|$name|$ip")
                     ((index++))
                 fi
@@ -476,10 +476,10 @@ connect_vm() {
 
 # ---------- Check Gensyn Node Status ----------
 check_gensyn_node_status() {
-    echo -e "\n${CYAN}${BOLD}🔍 Checking Gensyn Node Status...${RESET}\n"
+    echo -e "\n${CYAN}${BOLD}🔍 Gensyn Node Status${RESET}\n"
     
     if [ ! -f "$TERM_KEY_PATH" ]; then
-        echo -e "${RED}❌ Termius private key not found! Please connect a VM first to save the key.${RESET}"
+        echo -e "${RED}❌ Termius private key not found! Please connect to a VM first to save the key.${RESET}"
         read -p "Press Enter to continue..."
         return
     fi
@@ -488,63 +488,71 @@ check_gensyn_node_status() {
     crashed_vms=()
     index=1
 
-    printf "${YELLOW}┌─────┬────────────────┬──────────────────────┬───────────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-22s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "NODE STATUS (RAM/CPU)" "ACCOUNT"
-    printf "${YELLOW}├─────┼────────────────┼──────────────────────┼───────────────────────────────┤${RESET}\n"
+    printf "${YELLOW}┌─────┬────────────────┬───────────┬───────────┬───────┬───────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│${BOLD}%-5s│%-16s│%-11s│%-11s│%-7s│%-27s│${RESET}\n" "No" "VM Name" "Total RAM" "Used RAM" "CPU %" "Status"
+    printf "${YELLOW}├─────┼────────────────┼───────────┼───────────┼───────┼───────────────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
         gcloud config set account "$acc" > /dev/null 2>&1
         for proj in $(gcloud projects list --format="value(projectId)"); do
             billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null)
             if [ "$billing_enabled" != "True" ]; then continue; fi
-            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP)" 2>/dev/null)
+            mapfile -t vms < <(gcloud compute instances list --project=$proj --format="value(name,EXTERNAL_IP,machineType)" 2>/dev/null)
             for vm in "${vms[@]}"; do
                 name=$(echo $vm | awk '{print $1}')
                 ip=$(echo $vm | awk '{print $2}')
+                machine_type=$(echo $vm | awk '{print $3}')
                 
-                if [ -n "$name" ] && [ -n "$ip" ]; then
-                    ram_usage_mb=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "free -m | grep Mem | awk '{print \$3}'" 2>/dev/null)
-                    cpu_usage_percent=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "top -bn1 | grep 'Cpu(s)' | awk '{print \$2}' | cut -d'%' -f1" 2>/dev/null)
+                # Fetch RAM and CPU usage
+                ssh_output=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "free -m | grep Mem; top -bn1 | grep 'Cpu(s)'" 2>/dev/null)
+                
+                if [[ -z "$ssh_output" ]]; then
+                    # VM is offline
+                    status_str="${RED}🔴 CRASHED / OFFLINE${RESET}"
+                    live_status="FALSE"
+                    used_ram_gb="N/A"
+                    cpu_usage_percent="N/A"
                     
-                    ram_threshold=5120 # 5GB in MB
-                    cpu_threshold=10
-                    
-                    status_str=""
-                    if [[ -z "$ram_usage_mb" ]] || [[ -z "$cpu_usage_percent" ]]; then
-                        status_str="${RED}🔴 OFFLINE${RESET}"
-                        crashed_vms+=("$acc|$proj|$name|$ip")
+                    crashed_vms+=("$acc|$proj|$name|$ip")
+                else
+                    used_ram_mb=$(echo "$ssh_output" | grep 'Mem' | awk '{print $3}')
+                    total_ram_mb=$(echo "$ssh_output" | grep 'Mem' | awk '{print $2}')
+                    cpu_usage_percent=$(echo "$ssh_output" | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1)
+
+                    used_ram_gb=$(awk "BEGIN {printf \"%.1fG\", $used_ram_mb/1024}")
+                    total_ram_gb=$(awk "BEGIN {printf \"%.1fG\", $total_ram_mb/1024}")
+
+                    # Determine status and live node status
+                    if (( $(echo "$used_ram_mb > 5120" | bc -l) )) && (( $(echo "$cpu_usage_percent > 10" | bc -l) )); then
+                        status_str="${GREEN}🟢 RUNNING${RESET}"
+                        live_status="TRUE"
                     else
-                        ram_gb=$(awk "BEGIN {printf \"%.1f\", $ram_usage_mb/1024}")
-                        
-                        if (( $(echo "$ram_usage_mb > $ram_threshold" | bc -l) )) && (( $(echo "$cpu_usage_percent > $cpu_threshold" | bc -l) )); then
-                            status_str="${GREEN}🟢 RUNNING${RESET} ${YELLOW}(${ram_gb}G/${cpu_usage_percent}%)"
-                        else
-                            status_str="${RED}🔴 CRASHED${RESET} ${YELLOW}(${ram_gb}G/${cpu_usage_percent}%)"
-                            crashed_vms+=("$acc|$proj|$name|$ip")
-                        fi
+                        status_str="${RED}🔴 CRASHED${RESET}"
+                        live_status="FALSE"
+                        crashed_vms+=("$acc|$proj|$name|$ip")
                     fi
-                    
-                    printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${status_str}%-22s${YELLOW}│${CYAN}%-31s${YELLOW}│${RESET}\n" "$index" "$name" "$status_str" "$acc"
-                    vm_list+=("$acc|$proj|$name|$ip")
-                    ((index++))
                 fi
+                
+                printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${CYAN}%-11s│${MAGENTA}%-11s│${YELLOW}%-7s│${status_str}${live_status}%-27s${YELLOW}│${RESET}\n" "$index" "$name" "$total_ram_gb" "$used_ram_gb" "$cpu_usage_percent" "$status_str" "$live_status"
+                vm_list+=("$acc|$proj|$name|$ip")
+                ((index++))
             done
         done
     done
-    printf "${YELLOW}└─────┴────────────────┴──────────────────────┴───────────────────────────────┘${RESET}\n"
+    printf "${YELLOW}└─────┴────────────────┴───────────┴───────────┴───────┴───────────────────────────┘${RESET}\n"
 
     if [ ${#crashed_vms[@]} -gt 0 ]; then
         echo -e "\n${RED}⚠️ Detected Crashed Nodes!${RESET}"
         
         printf "${YELLOW}┌─────┬────────────────┬───────────────────────────────┐${RESET}\n"
-        printf "${YELLOW}│%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "No" "VM NAME" "ACCOUNT"
+        printf "${YELLOW}│%-5s│${BLUE}%-16s│${MAGENTA}%-31s│${RESET}\n" "No" "VM NAME" "ACCOUNT"
         printf "${YELLOW}├─────┼────────────────┼───────────────────────────────┤${RESET}\n"
 
         for i in "${!crashed_vms[@]}"; do
             crashed_info="${crashed_vms[$i]}"
             crashed_acc=$(echo "$crashed_info" | cut -d'|' -f1)
             crashed_name=$(echo "$crashed_info" | cut -d'|' -f3)
-            printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s${YELLOW}│${MAGENTA}%-31s${YELLOW}│${RESET}\n" "$((i+1))" "$crashed_name" "$crashed_acc"
+            printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${MAGENTA}%-31s│${RESET}\n" "$((i+1))" "$crashed_name" "$crashed_acc"
             crashed_list_for_connect[$((i+1))]="${crashed_info}"
         done
         printf "${YELLOW}└─────┴────────────────┴───────────────────────────────┘${RESET}\n"
