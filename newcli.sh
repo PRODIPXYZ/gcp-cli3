@@ -488,9 +488,9 @@ check_gensyn_node_status() {
     crashed_vms=()
     index=1
 
-    printf "${YELLOW}┌─────┬────────────────┬───────────┬───────────┬───────┬───────────────────────────┐${RESET}\n"
-    printf "${YELLOW}│${BOLD}%-5s│%-16s│%-11s│%-11s│%-7s│%-27s│${RESET}\n" "No" "VM Name" "Total RAM" "Used RAM" "CPU %" "Status"
-    printf "${YELLOW}├─────┼────────────────┼───────────┼───────────┼───────┼───────────────────────────┤${RESET}\n"
+    printf "${YELLOW}┌─────┬────────────────┬───────────────────────────────┬───────────────────────────────┬───────────────────┐${RESET}\n"
+    printf "${YELLOW}│${BOLD}%-5s│%-16s│%-31s│%-31s│%-19s│${RESET}\n" "No" "VM Name" "Email ID" "User Data & UserApiKey" "Live Status"
+    printf "${YELLOW}├─────┼────────────────┼───────────────────────────────┼───────────────────────────────┼───────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
         gcloud config set account "$acc" > /dev/null 2>&1
@@ -501,45 +501,27 @@ check_gensyn_node_status() {
             for vm in "${vms[@]}"; do
                 name=$(echo $vm | awk '{print $1}')
                 ip=$(echo $vm | awk '{print $2}')
-                machine_type=$(echo $vm | awk '{print $3}')
                 
-                # Fetch RAM and CPU usage
-                ssh_output=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "free -m | grep Mem; top -bn1 | grep 'Cpu(s)'" 2>/dev/null)
+                # Check for the existence of userApiKey.json and userData.json
+                # The script automatically uses the VM name as the SSH username
+                ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "ls /home/$name/rl-swarm/modal-login/temp-data/userApiKey.json /home/$name/rl-swarm/modal-login/temp-data/userData.json" >/dev/null 2>&1
                 
-                if [[ -z "$ssh_output" ]]; then
-                    # VM is offline
-                    status_str="${RED}🔴 CRASHED / OFFLINE${RESET}"
-                    live_status="FALSE"
-                    used_ram_gb="N/A"
-                    cpu_usage_percent="N/A"
-                    
-                    crashed_vms+=("$acc|$proj|$name|$ip")
+                if [ $? -eq 0 ]; then
+                    file_status="${GREEN}FOUND${RESET}"
+                    live_status="${GREEN}LIVE${RESET}"
                 else
-                    used_ram_mb=$(echo "$ssh_output" | grep 'Mem' | awk '{print $3}')
-                    total_ram_mb=$(echo "$ssh_output" | grep 'Mem' | awk '{print $2}')
-                    cpu_usage_percent=$(echo "$ssh_output" | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1)
-
-                    used_ram_gb=$(awk "BEGIN {printf \"%.1fG\", $used_ram_mb/1024}")
-                    total_ram_gb=$(awk "BEGIN {printf \"%.1fG\", $total_ram_mb/1024}")
-
-                    # Determine status and live node status
-                    if (( $(echo "$used_ram_mb > 5120" | bc -l) )) && (( $(echo "$cpu_usage_percent > 10" | bc -l) )); then
-                        status_str="${GREEN}🟢 RUNNING${RESET}"
-                        live_status="TRUE"
-                    else
-                        status_str="${RED}🔴 CRASHED${RESET}"
-                        live_status="FALSE"
-                        crashed_vms+=("$acc|$proj|$name|$ip")
-                    fi
+                    file_status="${RED}NOT FOUND${RESET}"
+                    live_status="${RED}OFFLINE${RESET}"
+                    crashed_vms+=("$acc|$proj|$name|$ip")
                 fi
                 
-                printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${CYAN}%-11s│${MAGENTA}%-11s│${YELLOW}%-7s│${status_str}${live_status}%-27s${YELLOW}│${RESET}\n" "$index" "$name" "$total_ram_gb" "$used_ram_gb" "$cpu_usage_percent" "$status_str" "$live_status"
+                printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${CYAN}%-31s│${file_status}%-31s${YELLOW}│${live_status}%-19s│${RESET}\n" "$index" "$name" "$acc" "$file_status" "$live_status"
                 vm_list+=("$acc|$proj|$name|$ip")
                 ((index++))
             done
         done
     done
-    printf "${YELLOW}└─────┴────────────────┴───────────┴───────────┴───────┴───────────────────────────┘${RESET}\n"
+    printf "${YELLOW}└─────┴────────────────┴───────────────────────────────┴───────────────────────────────┴───────────────────┘${RESET}\n"
 
     if [ ${#crashed_vms[@]} -gt 0 ]; then
         echo -e "\n${RED}⚠️ Detected Crashed Nodes!${RESET}"
