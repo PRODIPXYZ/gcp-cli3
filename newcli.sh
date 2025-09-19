@@ -489,7 +489,7 @@ check_gensyn_node_status() {
     index=1
 
     printf "${YELLOW}┌─────┬────────────────┬───────────────────────────────┬───────────────────────────────┬───────────────────┐${RESET}\n"
-    printf "${YELLOW}│${BOLD}%-5s│%-16s│%-31s│%-31s│%-19s│${RESET}\n" "No" "VM Name" "Email ID" "User Data & UserApiKey" "Live Status"
+    printf "${YELLOW}│${BOLD}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RESET}%-31s│${RESET}%-19s│${RESET}\n" "No" "VM Name" "Email ID" "User Data & UserApiKey" "Live Status"
     printf "${YELLOW}├─────┼────────────────┼───────────────────────────────┼───────────────────────────────┼───────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
@@ -503,7 +503,6 @@ check_gensyn_node_status() {
                 ip=$(echo $vm | awk '{print $2}')
                 
                 # Check for the existence of userApiKey.json and userData.json
-                # The script automatically uses the VM name as the SSH username
                 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "ls /home/$name/rl-swarm/modal-login/temp-data/userApiKey.json /home/$name/rl-swarm/modal-login/temp-data/userData.json" >/dev/null 2>&1
                 
                 if [ $? -eq 0 ]; then
@@ -515,7 +514,10 @@ check_gensyn_node_status() {
                     crashed_vms+=("$acc|$proj|$name|$ip")
                 fi
                 
-                printf "${YELLOW}│${RESET}%-5s│${BLUE}%-16s│${CYAN}%-31s│${file_status}%-31s${YELLOW}│${live_status}%-19s│${RESET}\n" "$index" "$name" "$acc" "$file_status" "$live_status"
+                printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${file_status}%-31s${YELLOW}│${live_status}%-19s│${RESET}\n" "$index" "$name" "$acc" "FOUND" "LIVE"
+                if [ $? -ne 0 ]; then
+                    printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RED}%-31s${YELLOW}│${RED}%-19s│${RESET}\n" "$index" "$name" "$acc" "NOT FOUND" "OFFLINE"
+                fi
                 vm_list+=("$acc|$proj|$name|$ip")
                 ((index++))
             done
