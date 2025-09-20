@@ -81,7 +81,7 @@ change_google_account() {
 # ---------- Auto Create Projects (with account selection) ----------
 auto_create_projects() {
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${CYAN}${BOLD}|          CREATE PROJECTS - ACCOUNT SELECTION      |"
+    echo -e "${CYAN}${BOLD}|             CREATE PROJECTS - ACCOUNT SELECTION     |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 📁 Create Projects in ONE Account             |"
     echo -e "${YELLOW}${BOLD}| [2] 📁 Create Projects in ALL Logged-in Accounts  |"
@@ -162,7 +162,7 @@ auto_create_vms() {
     echo -e "${CYAN}${BOLD}|             CREATE VMs - ACCOUNT SELECTION        |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🚀 Create VMs in ONE Account                  |"
-    echo -e "${YELLOW}${BOLD}| [2] 🚀 Create VMs in ALL Logged-in Accounts       |"
+    echo -e "${YELLOW}${BOLD}| [2] 🚀 Create VMs in ALL Logged-in Accounts      |"
     echo -e "${YELLOW}${BOLD}| [3] 🔙 Back                                       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
@@ -390,6 +390,77 @@ create_2_vms_in_project() {
     read -p "Press Enter to continue..."
 }
 
+# ---------- Create Single VM in a Project ----------
+create_single_vm() {
+    echo -e "\n${CYAN}${BOLD}➕ Create a Single VM in a Project${RESET}\n"
+
+    # Show accounts and let the user select one
+    list_google_accounts || return 1
+    read -p "Enter account number to create VM in: " acc_choice
+    selected_acc="${accounts_list[$acc_choice]}"
+    if [ -z "$selected_acc" ]; then
+        echo -e "${RED}Invalid account choice!${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+    gcloud config set account "$selected_acc" --quiet
+
+    # Show projects for the selected account
+    echo -e "\n${CYAN}${BOLD}📁 Projects for account: ${BOLD}$selected_acc${RESET}\n"
+    projects=()
+    index=1
+    printf "${YELLOW}┌─────┬──────────────────────────────┐${RESET}\n"
+    printf "${YELLOW}│%-5s│${CYAN}%-30s│${RESET}\n" "No" "PROJECT"
+    printf "${YELLOW}├─────┼──────────────────────────────┤${RESET}\n"
+    for proj in $(gcloud projects list --format="value(projectId)"); do
+        billing_enabled=$(gcloud beta billing projects describe "$proj" --format="value(billingEnabled)" 2>/dev/null)
+        if [ "$billing_enabled" = "True" ]; then
+            printf "${YELLOW}│${RESET}%-5s│${CYAN}%-30s│${RESET}\n" "$index" "$proj"
+            projects+=("$proj")
+            ((index++))
+        fi
+    done
+    printf "${YELLOW}└─────┴──────────────────────────────┘${RESET}\n"
+
+    if [ ${#projects[@]} -eq 0 ]; then
+        echo -e "${RED}❌ No billing-enabled projects found for this account.${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+
+    # Let the user select a project
+    read -p "Choose project number to create the VM in: " proj_choice
+    proj="${projects[$((proj_choice-1))]}"
+    if [ -z "$proj" ]; then
+        echo -e "${RED}Invalid project choice!${RESET}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+    gcloud config set project "$proj" --quiet
+
+    # Get VM name and SSH key
+    echo -e "${CYAN}${BOLD}Enter a single VM Name:${RESET}"
+    read -p "VM Name: " vmname
+    read -p "Enter your SSH Public Key (only key part): " pubkey
+
+    zone="asia-southeast1-b"
+    mtype="n2d-custom-4-25600"
+    disksize="60"
+
+    echo -e "${GREEN}Creating VM $vmname in project $proj...${RESET}"
+    gcloud compute instances create $vmname \
+        --zone=$zone --machine-type=$mtype \
+        --image-family=ubuntu-2404-lts-amd64 \
+        --image-project=ubuntu-os-cloud \
+        --boot-disk-size=${disksize}GB \
+        --boot-disk-type=pd-balanced \
+        --metadata ssh-keys="${vmname}:${pubkey}" \
+        --tags=http-server,https-server --quiet
+
+    echo -e "${GREEN}✔ VM '$vmname' created successfully in project '$proj'!${RESET}"
+    read -p "Press Enter to continue..."
+}
+
 # ---------- Show All VMs ----------
 show_all_vms() {
     echo -e "\n${CYAN}${BOLD}💻 MADE BY PRODIP${RESET}\n"
@@ -506,17 +577,10 @@ check_gensyn_node_status() {
                 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "ls /home/$name/rl-swarm/modal-login/temp-data/userApiKey.json /home/$name/rl-swarm/modal-login/temp-data/userData.json" >/dev/null 2>&1
                 
                 if [ $? -eq 0 ]; then
-                    file_status="${GREEN}FOUND${RESET}"
-                    live_status="${GREEN}LIVE${RESET}"
+                    printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${GREEN}%-31s${YELLOW}│${GREEN}%-19s│${RESET}\n" "$index" "$name" "$acc" "Data Found" "LIVE"
                 else
-                    file_status="${RED}NOT FOUND${RESET}"
-                    live_status="${RED}OFFLINE${RESET}"
-                    crashed_vms+=("$acc|$proj|$name|$ip")
-                fi
-                
-                printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${file_status}%-31s${YELLOW}│${live_status}%-19s│${RESET}\n" "$index" "$name" "$acc" "FOUND" "LIVE"
-                if [ $? -ne 0 ]; then
                     printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RED}%-31s${YELLOW}│${RED}%-19s│${RESET}\n" "$index" "$name" "$acc" "NOT FOUND" "OFFLINE"
+                    crashed_vms+=("$acc|$proj|$name|$ip")
                 fi
                 vm_list+=("$acc|$proj|$name|$ip")
                 ((index++))
@@ -563,7 +627,7 @@ check_gensyn_node_status() {
 while true; do
     clear
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${CYAN}${BOLD}|         GCP CLI MENU (ASISH AND PRODIP)           |"
+    echo -e "${CYAN}${BOLD}|             GCP CLI MENU (ASISH AND PRODIP)       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)  |"
@@ -576,14 +640,15 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                              |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)             |"
     echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                     |"
-    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                      |"
+    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                     |"
     echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                     |"
     echo -e "${YELLOW}${BOLD}| [14] ➕ Add Extra 2 VMs in Existing Project        |"
     echo -e "${YELLOW}${BOLD}| [15] ➕ Create 2 VMs in Any Project                |"
     echo -e "${YELLOW}${BOLD}| [16] 🟢 Check Gensyn Node Status                  |"
+    echo -e "${YELLOW}${BOLD}| [17] 🎯 Create Single VM in a Project              |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
-    read -p "Choose an option [1-16]: " choice
+    read -p "Choose an option [1-17]: " choice
 
     case $choice in
         1) fresh_install ;;
@@ -592,10 +657,10 @@ while true; do
         4) auto_create_vms ;;
         5) show_all_vms ;;
         6) for acc in $(gcloud auth list --format="value(account)"); do
-               gcloud config set account "$acc" > /dev/null 2>&1
-               echo -e "${CYAN}${BOLD}Account: $acc${RESET}"
-               gcloud projects list --format="table(projectId,name,createTime)"
-           done ; read -p "Press Enter..." ;;
+                gcloud config set account "$acc" > /dev/null 2>&1
+                echo -e "${CYAN}${BOLD}Account: $acc${RESET}"
+                gcloud projects list --format="table(projectId,name,createTime)"
+            done ; read -p "Press Enter..." ;;
         7) connect_vm ;;
         8) if [ -f "$SSH_INFO_FILE" ]; then rm "$SSH_INFO_FILE"; echo -e "${GREEN}VM disconnected.${RESET}"; else echo -e "${YELLOW}No active VM.${RESET}"; fi; read -p "Press Enter..." ;;
         9) gcloud projects list --format="table(projectId,name)" ; read -p "Enter PID: " projid ; gcloud compute instances list --project=$projid --format="table(name,zone,status)" ; read -p "Enter VM: " vmname ; zone=$(gcloud compute instances list --project=$projid --filter="name=$vmname" --format="value(zone)") ; gcloud compute instances delete $vmname --project=$projid --zone=$zone --quiet ;;
@@ -606,6 +671,7 @@ while true; do
         14) add_extra_vms ;;
         15) create_2_vms_in_project ;;
         16) check_gensyn_node_status ;;
+        17) create_single_vm ;;
         *) echo -e "${RED}Invalid choice!${RESET}" ; read -p "Press Enter..." ;;
     esac
 done
