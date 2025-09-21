@@ -162,7 +162,7 @@ auto_create_vms() {
     echo -e "${CYAN}${BOLD}|             CREATE VMs - ACCOUNT SELECTION        |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${YELLOW}${BOLD}| [1] 🚀 Create VMs in ONE Account                  |"
-    echo -e "${YELLOW}${BOLD}| [2] 🚀 Create VMs in ALL Logged-in Accounts      |"
+    echo -e "${YELLOW}${BOLD}| [2] 🚀 Create VMs in ALL Logged-in Accounts       |"
     echo -e "${YELLOW}${BOLD}| [3] 🔙 Back                                       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
@@ -326,7 +326,7 @@ add_extra_vms() {
 
     for vmname in "${vmnames[@]}"; do
         gcloud compute instances create $vmname \
-            --zone=$zone --machine-type=$mtype \
+            --project=$proj --zone=$zone --machine-type=$mtype \
             --image-family=ubuntu-2404-lts-amd64 \
             --image-project=ubuntu-os-cloud \
             --boot-disk-size=${disksize}GB \
@@ -377,7 +377,7 @@ create_2_vms_in_project() {
 
     for vmname in "${vmnames[@]}"; do
         gcloud compute instances create $vmname \
-            --zone=$zone --machine-type=$mtype \
+            --project=$proj --zone=$zone --machine-type=$mtype \
             --image-family=ubuntu-2404-lts-amd64 \
             --image-project=ubuntu-os-cloud \
             --boot-disk-size=${disksize}GB \
@@ -449,7 +449,7 @@ create_single_vm() {
 
     echo -e "${GREEN}Creating VM $vmname in project $proj...${RESET}"
     gcloud compute instances create $vmname \
-        --zone=$zone --machine-type=$mtype \
+        --project=$proj --zone=$zone --machine-type=$mtype \
         --image-family=ubuntu-2404-lts-amd64 \
         --image-project=ubuntu-os-cloud \
         --boot-disk-size=${disksize}GB \
@@ -560,7 +560,7 @@ check_gensyn_node_status() {
     index=1
 
     printf "${YELLOW}┌─────┬────────────────┬───────────────────────────────┬───────────────────────────────┬───────────────────┐${RESET}\n"
-    printf "${YELLOW}│${BOLD}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RESET}%-31s│${RESET}%-19s│${RESET}\n" "No" "VM Name" "Email ID" "User Data & UserApiKey" "Live Status"
+    printf "${YELLOW}│${BOLD}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RESET}%-31s│${RESET}%-19s│${RESET}\n" "No" "VM Name" "Email ID" "Log Check" "Live Status"
     printf "${YELLOW}├─────┼────────────────┼───────────────────────────────┼───────────────────────────────┼───────────────────┤${RESET}\n"
 
     for acc in $(gcloud auth list --format="value(account)"); do
@@ -573,13 +573,13 @@ check_gensyn_node_status() {
                 name=$(echo $vm | awk '{print $1}')
                 ip=$(echo $vm | awk '{print $2}')
                 
-                # Check for the existence of userApiKey.json and userData.json
-                ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" "ls /home/$name/rl-swarm/modal-login/temp-data/userApiKey.json /home/$name/rl-swarm/modal-login/temp-data/userData.json" >/dev/null 2>&1
+                # --- NEW LOGIC: Check for "Map: 100%" in tmux session 'GEN' ---
+                ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$TERM_KEY_PATH" "$name@$ip" 'tmux capture-pane -t "GEN" -p -S -10 | grep -q "Map: 100%"' >/dev/null 2>&1
                 
                 if [ $? -eq 0 ]; then
-                    printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${GREEN}%-31s${YELLOW}│${GREEN}%-19s│${RESET}\n" "$index" "$name" "$acc" "Data Found" "LIVE"
+                    printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${GREEN}%-31s${YELLOW}│${GREEN}%-19s│${RESET}\n" "$index" "$name" "$acc" "Map: 100% Found" "LIVE"
                 else
-                    printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RED}%-31s${YELLOW}│${RED}%-19s│${RESET}\n" "$index" "$name" "$acc" "NOT FOUND" "OFFLINE"
+                    printf "${YELLOW}│${RESET}%-5s│${YELLOW}%-16s│${CYAN}%-31s│${RED}%-31s${YELLOW}│${RED}%-19s│${RESET}\n" "$index" "$name" "$acc" "Not Found" "OFFLINE"
                     crashed_vms+=("$acc|$proj|$name|$ip")
                 fi
                 vm_list+=("$acc|$proj|$name|$ip")
@@ -629,7 +629,7 @@ while true; do
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo -e "${CYAN}${BOLD}|             GCP CLI MENU (ASISH AND PRODIP)       |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
-    echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                   |"
+    echo -e "${YELLOW}${BOLD}| [1] 🛠️ Fresh Install + CLI Setup                  |"
     echo -e "${YELLOW}${BOLD}| [2] 🔄 Add / Change Google Account (Multi-Login)  |"
     echo -e "${YELLOW}${BOLD}| [3] 📁 Create Projects (Account Select)           |"
     echo -e "${YELLOW}${BOLD}| [4] 🚀 Create VMs (Account Select)                |"
@@ -640,12 +640,12 @@ while true; do
     echo -e "${YELLOW}${BOLD}| [9] 🗑️ Delete ONE VM                              |"
     echo -e "${YELLOW}${BOLD}| [10] 💣 Delete ALL VMs (All Accounts)             |"
     echo -e "${YELLOW}${BOLD}| [11] 💳 Show Billing Accounts                     |"
-    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                     |"
+    echo -e "${YELLOW}${BOLD}| [12] 🚪 Exit                                      |"
     echo -e "${YELLOW}${BOLD}| [13] 🔓 Logout Google Account                     |"
     echo -e "${YELLOW}${BOLD}| [14] ➕ Add Extra 2 VMs in Existing Project        |"
     echo -e "${YELLOW}${BOLD}| [15] ➕ Create 2 VMs in Any Project                |"
     echo -e "${YELLOW}${BOLD}| [16] 🟢 Check Gensyn Node Status                  |"
-    echo -e "${YELLOW}${BOLD}| [17] 🎯 Create Single VM in a Project              |"
+    echo -e "${YELLOW}${BOLD}| [17] 🎯 Create Single VM in a Project             |"
     echo -e "${CYAN}${BOLD}+---------------------------------------------------+"
     echo
     read -p "Choose an option [1-17]: " choice
